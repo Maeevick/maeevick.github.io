@@ -2,4 +2,6 @@
 
 https://itch.io/jam/bevy-jam-6
 
-**🚧 Under Construction 🚧**
+**🫣 Abandonned 🫣**: I had no time for the jam.
+
+But it's still usable/valuable as a project kickstarter
