@@ -6,7 +6,6 @@ minify_html = true
 compile_sass = true
 
 [markdown]
-highlight_code = true
 external_links_target_blank = true
 
 [extra]
@@ -18,5 +17,3 @@ description = "Mon petit univers presque créatif où fantasy, expérimentations
 [languages.en]
 title = "Maeevick"
 description = "My almost creative little universe where fantasy, tech experiments, and game development live and explode."
-
-
