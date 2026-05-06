@@ -1,28 +1,67 @@
-main {
-  padding: 1.5rem;
-  max-width: 1200px;
-  margin: 0 auto;
-
-  @media (min-width: $breakpoint-md) {
-    padding: 2rem;
-  }
-}
-
-.border-left-primary {
-  border-left: 3px solid $color-primary;
-}
-
-.border-left-secondary {
-  border-left: 3px solid $color-secondary;
-}
-
-.border-left-accent {
-  border-left: 3px solid $color-accent;
-}
-
 .gradient-divider {
   height: 2px;
   width: 6rem;
   margin: 1rem 0;
-  background: linear-gradient(to right, $color-primary, $color-accent);
+  background: var(--gradient-line);
+}
+
+.narrator-quote {
+  margin: 1.5rem 0 2rem;
+  padding-left: 1.25rem;
+  border-left: 3px solid;
+  border-image: var(--gradient-line) 1;
+
+  blockquote {
+    border-left: none;
+    padding-left: 0;
+    font-style: italic;
+    color: var(--color-text-muted);
+  }
+}
+
+
+.cta {
+  display: inline-block;
+  vertical-align: middle;
+  padding: 0.75rem 2rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  border: none;
+  color: #18181b;
+  background: var(--gradient-line);
+  transition: opacity 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  text-decoration: underline;
+  letter-spacing: 0.05em;
+
+  &:hover {
+    opacity: 0.82;
+    transform: translateY(-2px) rotate(-0.5deg);
+    text-decoration: none;
+    color: #18181b;
+  }
+}
+
+// Desktop: CTA in .intro renders as full-width block below its preceding line
+.intro .cta {
+  display: block;
+  width: 100%;
+  max-width: 600px;
+  text-align: center;
+  margin: 0.75rem auto 0;
+  box-sizing: border-box;
+}
+
+
+.section-title {
+  background: var(--gradient-line);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+
+.section-desc {
+  color: var(--color-text-muted);
+  margin-bottom: 1.5rem;
 }

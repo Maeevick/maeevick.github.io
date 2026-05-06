@@ -1,0 +1,33 @@
+{% macro card(title, desc, href, date="", section_class="") %}
+<a href="{{ href }}" class="card {{ section_class }}">
+  <h3>{{ title }}</h3>
+  <p><i>{{ desc }}</i></p>
+  {% if date %}<span class="card-meta">{{ date }}</span>{% endif %}
+</a>
+{% endmacro %}
+
+{% macro card_placeholder() %}
+<div class="card card-coming-soon">
+  <h3>🚧 TODO 🚧</h3>
+  <p><i>Explosion is coming...</i></p>
+  <span class="card-meta">soon...</span>
+</div>
+{% endmacro %}
+
+{% macro section_header(title, desc, quote="", narrator="") %}
+<h1 class="section-title">{{ title }}</h1>
+{% if desc %}<p class="section-desc"><i>{{ desc }}</i></p>{% endif %}
+{% if quote %}
+<div class="narrator-quote">
+  {{ quote | safe }}
+  {% if narrator %}<cite>— {{ narrator }}</cite>{% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro divider() %}
+<div class="gradient-divider" aria-hidden="true"></div>
+{% endmacro %}
+
+{% macro t(en, fr, lang="en") %}{% if lang == "fr" %}{{ fr }}{% else %}{{ en }}{% endif %}{% endmacro %}
+

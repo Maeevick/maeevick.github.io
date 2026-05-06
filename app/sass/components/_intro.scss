@@ -1,6 +1,45 @@
 .intro {
-  max-width: 80ch;
-  margin-bottom: 2rem;
-  text-align: justify;
   margin-bottom: 3rem;
+  color: var(--color-text-muted);
+
+  // USP headline breaks out of muted treatment
+  h1 {
+    background: var(--gradient-line);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+    line-height: 1.1;
+  }
+
+  // First <p> after h1 = CTPO subtitle — full brightness
+  h1 + p {
+    color: var(--color-text);
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  // Services line (second <p>)
+  h1 + p + p {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    margin-bottom: 0;
+  }
+
+  p { margin-bottom: 0.75rem; }
+  strong { color: var(--color-text); }
+
+  a:not(.cta) {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+
+  hr {
+    border-color: var(--color-border);
+    margin: 1.5rem 0;
+  }
 }

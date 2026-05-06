@@ -1,32 +1,32 @@
 {% extends "base.html" %}
+{% import "macros/components.html" as components %}
 
 {% block title %}{{ section.title }}{% endblock %}
-
-{% block description %}{{ section.title }} - {{ section.description }}{% endblock %}
+{% block description %}{{ section.title }} — {{ section.description }}{% endblock %}
 
 {% block content %}
-<h1>
-  {{ section.title }} - <i>{{section.description}}</i>
-</h1>
 
-<div
-  class="intro border-left-{% if current_path is starting_with('/lab') %}secondary{% elif current_path is starting_with('/codex') %}accent{% else %}primary{% endif %}">
-  {{ section.content | safe }}
-</div>
+{{ components::section_header(title=section.title, desc=section.description, quote=section.content) }}
 
 {% if section.pages %}
-<div>
+<div class="section-articles">
   {% for page in section.pages %}
   <article>
-    <h2>
-      <a href="{{ page.permalink }}">{{ page.title }}</a>
-    </h2>
-    <p>
-      {{ page.description }}
+    <h2><a href="{{ page.permalink }}">{{ page.title }}</a></h2>
+    <p>{{ page.description }}</p>
+    {% if page.date %}
+    <p class="article-date">
+      {% if lang == "fr" %}{{ page.date | date(format="%d %B %Y", locale="fr_FR") }}{% else %}{{ page.date | date(format="%B %e, %Y", locale="en_US") }}{% endif %}
     </p>
-    <div class="gradient-divider"></div>
+    {% endif %}
+    {{ components::divider() }}
   </article>
   {% endfor %}
 </div>
+{% else %}
+<p style="color: var(--color-text-muted); font-style: italic; margin-top: 2rem;">
+  {% if lang == "fr" %}Rien encore... mais ça arrive.{% else %}Nothing yet… but it's coming.{% endif %}
+</p>
 {% endif %}
+
 {% endblock %}

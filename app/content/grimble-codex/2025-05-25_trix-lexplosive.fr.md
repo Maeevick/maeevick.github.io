@@ -2,6 +2,7 @@
 title = "Trix l'Apprentie Chaotique - Étude Comportementale d'un Phénomène Explosif"
 description = "Observations détaillées sur une étudiante dont les expérimentations défient toute logique classificatoire"
 date = 2025-05-25
+slug = "trix-explosive"
 [extra]
 locale = "fr_FR"
 +++

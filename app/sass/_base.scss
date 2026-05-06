@@ -8,25 +8,54 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Space Mono";
+  src: url("fonts/SpaceMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Space Mono";
+  src: url("fonts/SpaceMono-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Space Mono";
+  src: url("fonts/SpaceMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+html {
+  overflow-y: scroll;
+}
+
 body {
-  font-family: $font-main;
-  background-color: $color-light;
-  color: $color-dark;
-  line-height: 1.5;
+  font-family: var(--font-main);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
   margin: 0;
   padding: 0;
 }
 
 h1,
-h2 {
-  font-family: $font-display;
-  color: $color-dark;
+h2,
+h3 {
+  font-family: var(--font-display);
+  color: var(--color-text);
   margin-bottom: 1.2rem;
   line-height: 1.2;
 }
@@ -47,8 +76,18 @@ h2 {
   }
 }
 
+h3 {
+  font-size: 1.25rem;
+
+  @media (min-width: $breakpoint-md) {
+    font-size: 1.5rem;
+  }
+}
+
 hr {
-  margin-bottom: 1rem;
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1.5rem 0;
 }
 
 p {
@@ -57,19 +96,55 @@ p {
 
 ul {
   margin-bottom: 1rem;
-  padding-left: 1rem;
+  padding-left: 1.25rem;
+}
+
+li {
+  margin-bottom: 0.25rem;
 }
 
 a {
   text-decoration: none;
-  color: $color-secondary;
+  color: var(--color-primary);
   transition: color 0.2s ease;
 
   &:hover {
+    color: var(--color-accent-b);
     text-decoration: underline;
   }
 }
 
 blockquote {
+  border-left: 3px solid var(--color-section);
   padding-left: 1rem;
+  color: var(--color-text-muted);
+  margin: 1rem 0;
+
+  p { margin-bottom: 0; }
+}
+
+cite {
+  display: block;
+  margin-top: 0.5rem;
+  font-style: normal;
+  color: var(--color-primary);
+  font-size: 0.9rem;
+}
+
+strong {
+  color: var(--color-text);
+}
+
+code {
+  font-family: var(--font-main);
+  background: var(--color-surface);
+  padding: 0.1em 0.3em;
+  border-radius: 2px;
+  font-size: 0.9em;
+}
+
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
 }

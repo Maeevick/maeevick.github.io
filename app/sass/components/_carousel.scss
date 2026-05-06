@@ -8,83 +8,19 @@
   padding: 1rem 0;
   margin: 0;
   list-style: none;
-  z-index: 1;
 
   scrollbar-width: none;
   -ms-overflow-style: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
+  &::-webkit-scrollbar { display: none; }
 }
 
 .carousel-item {
   scroll-snap-align: start;
   flex: 0 0 auto;
   width: 100%;
-  max-width: 320px;
+  max-width: 300px;
 
   @media (max-width: #{$breakpoint-md - 1}) {
-    width: 90%;
-  }
-}
-
-.card {
-  display: block;
-  height: 100%;
-  min-height: 180px;
-  padding: 1.2rem;
-  background-color: $color-gray-100;
-  border-radius: $border-radius;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid $color-gray-400;
-  text-decoration: none;
-  transition: all 0.2s ease;
-
-  &:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    text-decoration: none;
-  }
-
-  h3 {
-    margin-bottom: 0.75rem;
-    font-size: 1.2rem;
-  }
-
-  p {
-    margin-bottom: 0.75rem;
-    font-size: 0.9rem;
-    flex-grow: 1;
-    color: $color-dark;
-  }
-
-  .card-meta {
-    font-size: 0.8rem;
-    color: $color-primary;
-    font-style: italic;
-  }
-}
-
-.carousel-item:nth-child(1) .card:not(.card-coming-soon):hover {
-  border-left-color: $color-primary;
-}
-
-.carousel-item:nth-child(2) .card:not(.card-coming-soon):hover {
-  border-left-color: $color-secondary;
-}
-
-.carousel-item:nth-child(3) .card:not(.card-coming-soon):hover {
-  border-left-color: $color-accent;
-}
-
-.card-coming-soon {
-  opacity: 0.8;
-  cursor: default;
-
-  &:hover {
-    border-left-color: $color-gray-400;
-    transform: none;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    width: 85%;
   }
 }

@@ -1,0 +1,52 @@
+// ── Page fade-in ─────────────────────────────────────────────────────────────
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+main {
+  animation: fade-in 0.25s ease forwards;
+}
+
+// ── Section article list — staggered reveal ──────────────────────────────────
+.section-articles article {
+  opacity: 0;
+  animation: fade-in 0.25s ease forwards;
+
+  @for $i from 1 through 5 {
+    &:nth-child(#{$i}) {
+      animation-delay: #{$i * 0.05}s;
+    }
+  }
+}
+
+// ── Subtle scanline overlay on section blocks ────────────────────────────────
+.recent-section {
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0, 0, 0, 0.025) 3px,
+      rgba(0, 0, 0, 0.025) 4px
+    );
+    pointer-events: none;
+    border-radius: $border-radius;
+  }
+}
+
+// ── Active nav border pulse ───────────────────────────────────────────────────
+@keyframes border-pulse {
+  0%, 100% { border-bottom-color: var(--color-primary); }
+  50%       { border-bottom-color: var(--color-accent-a); }
+}
+
+.main-nav a.active {
+  animation: border-pulse 3s ease infinite;
+}

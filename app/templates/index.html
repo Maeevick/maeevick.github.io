@@ -1,79 +1,55 @@
 {% extends "base.html" %}
+{% import "macros/components.html" as components %}
 
 {% block title %}{{ section.title }}{% endblock %}
-{% block description %}{{ section.title }} - {{ section.description }}{% endblock %}
+{% block description %}{{ section.description }}{% endblock %}
 
 {% block content %}
 
-<h1>{{ section.title }} - <i>{{section.description}}</i></h1>
-<div class="intro border-left-primary">{{ section.content | safe }}</div>
-
+<div class="intro">
+  {{ section.content | safe }}
+</div>
 
 <section class="recent-section">
-  <h2>{% if lang == "fr" %}
-    Les Dernières Péripéties
-    {% else %}
-    The Last Adventures
-    {% endif %}</h2>
-  <div class="gradient-divider"></div>
+  <h2>{% if lang == "fr" %}Les Dernières Péripéties{% else %}Latest from the Universe{% endif %}</h2>
+  {{ components::divider() }}
 
-  <p>{% if lang == "fr" %}
-    Retrouve ici mes dernières expériences !
-    {% else %}
-    Stay tuned for updates on my latest experiments!
-    {% endif %}</p>
   <ul class="carousel">
+    {% set trix_lab = get_section(path="trix-lab/_index.md", lang=lang) %}
+    {% set grimble_codex = get_section(path="grimble-codex/_index.md", lang=lang) %}
+    {% set veil_vault = get_section(path="veil-vault/_index.md", lang=lang) %}
 
-    {% set quest = get_section(path="quests/_index.md", lang=lang) %}
-    {% set codex = get_section(path="codex/_index.md", lang=lang) %}
-    {% set lab = get_section(path="lab/_index.md", lang=lang) %}
-
-    {% set_global recent_pages = [] | concat(with=quest.pages)| concat(with=codex.pages)| concat(with=lab.pages)
-    |
-    sort(attribute="date") | reverse | slice(end=3) %}
+    {% set_global recent_pages = []
+      | concat(with=trix_lab.pages)
+      | concat(with=grimble_codex.pages)
+      | concat(with=veil_vault.pages)
+      | sort(attribute="date")
+      | reverse
+      | slice(end=3) %}
 
     {% for page in recent_pages %}
     <li class="carousel-item">
-      <a href="{{ page.permalink }}" class="card">
-        <h3>{{ page.title }}</h3>
-        <p><i>{{ page.description }}</i></p>
-        <span class="card-meta">{{ page.date | date(format="%d %B %Y") }}</span>
-      </a>
+      {% if lang == "fr" %}
+        {% set card_date = page.date | date(format="%d %B %Y", locale="fr_FR") %}
+      {% else %}
+        {% set card_date = page.date | date(format="%B %e, %Y", locale="en_US") %}
+      {% endif %}
+      {{ components::card(
+        title=page.title,
+        desc=page.description,
+        href=page.permalink,
+        date=card_date
+      ) }}
     </li>
     {% endfor %}
 
     {% set count = recent_pages | length %}
     {% for i in range(end=3 - count) %}
     <li class="carousel-item">
-      <div class="card card-coming-soon">
-        <h3>🚧 TODO 🚧</h3>
-        <p><i>Explosion is coming...</i></p>
-        <span class="card-meta">soon...</span>
-      </div>
+      {{ components::card_placeholder() }}
     </li>
     {% endfor %}
   </ul>
 </section>
 
-<section class="hero-section">
-  <h2>{% if lang == "fr" %}
-    À Propos <i>(en presque deux mots)</i>
-    {% else %}
-    About Me <i>(in almost two words)</i>
-    {% endif %}</h2>
-  <div class="gradient-divider"></div>
-
-  <p>🧢 Product & Tech Leader {% if lang == "fr" %}
-    le jour
-    {% else %}
-    by day
-    {% endif %}</p>
-  <p>
-    🛠️ Extreme Programmer {% if lang == "fr" %}
-    explorant et <i>bidouille-codant</i> des trucs chaotiques et bizares la nuit
-    {% else %}
-    exploring and tinkering with weird and chaotic stuff by night
-    {% endif %}
-  </p>
-</section>
 {% endblock %}

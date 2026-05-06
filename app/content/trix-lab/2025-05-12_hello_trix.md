@@ -1,7 +1,8 @@
 +++
-title = "Hello, Trix! 🧪💥"
+title = "Hello, Trix!"
 description = "An overview of the \"project\" for www.maeevick.com and its upcoming experiments, following the closure of my Substack"
 date = 2025-05-12
+slug = "hello-trix"
 lang = "en"
 [extra]
 locale = "en-US"

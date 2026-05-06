@@ -6,15 +6,23 @@
 {% set lang = "fr" %}
 {% endif %}
 
+{% set section_class = "" %}
+{% if current_path is containing("/trix-lab") %}
+  {% set section_class = "section-trix-lab" %}
+{% elif current_path is containing("/grimble-codex") %}
+  {% set section_class = "section-grimble-codex" %}
+{% elif current_path is containing("/veil-vault") %}
+  {% set section_class = "section-veil-vault" %}
+{% endif %}
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>{{ config.title }} - {% block title %}{{ config.title }}{% endblock %}</title>
-    <meta name="description" content="{% block description %}{{ page.description }}{% endblock %}">
+    <meta name="description" content="{% block description %}{{ config.description }}{% endblock %}">
     <meta name="author" content="Aurel | Maeevick">
-    <meta name="keywords" content="creative universe, writing, fantasy, steampunk, programming, tech, software
-        engineering, gamedesign, game development, retro-gaming">
+    <meta name="keywords" content="creative universe, fantasy, steampunk, programming, tech, software engineering, gamedev, game development, cybersecurity, bug bounty, retro">
 
     <link rel="canonical" href="{{ current_url | safe }}">
 
@@ -23,60 +31,62 @@
     <meta property="og:title" content="{% block og_title %}{{ config.title }}{% endblock %}">
     <meta property="og:description" content="{% block og_description %}{{ config.description }}{% endblock %}">
     <meta property="og:image" content="{% block og_image %}{{ get_url(path='img/og-image.jpg') }}{% endblock %}">
-    <meta property="og:locale"
-        content="{% if page and page.extra.locale %}{{ page.extra.locale }}{% elif section and section.extra.locale %}{{ section.extra.locale }}{% else %}fr_FR{% endif %}">
+    <meta property="og:locale" content="{% if page and page.extra.locale %}{{ page.extra.locale }}{% elif section and section.extra.locale %}{{ section.extra.locale }}{% else %}en_US{% endif %}">
     <meta property="og:site_name" content="{{ config.title }}">
 
     <link rel="stylesheet" href="{{ get_url(path='main.css') }}">
     <link rel="icon" href="{{ get_url(path='favicon.ico') }}" type="image/x-icon">
 
     <meta name="theme-color" content="#18181b">
-    <meta name="robots"
-        content="{% block robots %}{% if page and page.extra.robots %}{{ page.extra.robots }}{% elif section and section.extra.robots %}{{ section.extra.robots }}{% else %}index, follow{% endif %}{% endblock %}">
+    <meta name="robots" content="{% block robots %}{% if page and page.extra.robots %}{{ page.extra.robots }}{% elif section and section.extra.robots %}{{ section.extra.robots }}{% else %}index, follow{% endif %}{% endblock %}">
 </head>
 
-<body>
+<body class="{{ section_class }}">
     <header class="header">
-        <div>
-            <a href="{{ get_url(path='@/_index.md', lang=lang) }}" class="brand">
-                <span class="logo">🤪</span>
-                <span class="hook">fantasy, tech, gamedev</span>
+        <div class="brand">
+            <a href="{{ get_url(path='@/_index.md', lang=lang) }}" class="brand-link">
+                <picture>
+                    <source srcset="{{ get_url(path='img/goblin.webp') }}" type="image/webp">
+                    <img src="{{ get_url(path='img/goblin.jpg') }}" alt="Maeevick goblin avatar" class="logo" width="72" height="72">
+                </picture>
             </a>
-            <div class="lang-switcher">
-                {% set en_path = current_path | replace(from="/fr", to="") | replace(from="//", to="/") %}
-                <a href="{{ get_url(path=en_path, trailing_slash=true) }}" {% if lang=="en" %}class="active" {% endif %}
-                    title="English">
-                    🇺🇸
-                </a>
-
-                {% set clean_path = current_path | replace(from="/fr", to="") %}
-                {% set fr_path = "/fr" ~ clean_path %}
-                <a href="{{ get_url(path=fr_path, trailing_slash=true) }}" {% if lang=="fr" %}class="active" {% endif %}
-                    title="Français">
-                    🇫🇷
-                </a>
+            <div class="brand-text">
+                <span class="hook">tech · gamedev · security</span>
+                <div class="brand-controls">
+                    <div class="lang-switcher">
+                        {% set en_path = current_path | replace(from="/fr", to="") | replace(from="//", to="/") %}
+                        <a href="{{ get_url(path=en_path, trailing_slash=true) }}" {% if lang=="en" %}class="active"{% endif %} title="English">🇺🇸</a>
+                        {% set clean_path = current_path | replace(from="/fr", to="") %}
+                        {% set fr_path = "/fr" ~ clean_path %}
+                        <a href="{{ get_url(path=fr_path, trailing_slash=true) }}" {% if lang=="fr" %}class="active"{% endif %} title="Français">🇫🇷</a>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <input type="checkbox" id="menu-toggle" class="menu-toggle">
-        <label for="menu-toggle" class="hamburger">
+        <input type="checkbox" id="menu-toggle" class="sr-only" aria-label="Toggle navigation menu">
+        <label for="menu-toggle" class="hamburger" aria-label="Menu">
             <span></span>
             <span></span>
             <span></span>
         </label>
 
-        <nav class="main-nav">
+        <nav class="main-nav" aria-label="Main navigation">
             <ul>
-                <li><a href="{{ get_url(path='@/_index.md', lang=lang) }}" {% if current_path=="/" or
-                        current_path=="/fr/" %}class="active" {% endif %}>The
-                        Tavern</a></li>
-                <li><a href="{{ get_url(path='@/quests/_index.md', lang=lang) }}" {% if current_path=="/quests/" or
-                        current_path=="/fr/quests/" %}class="active" {% endif %}>The Quests</a></li>
-                <li><a href="{{ get_url(path='@/codex/_index.md', lang=lang) }}" {% if current_path=="/codex/" or
-                        current_path=="/fr/codex/" %}class="active" {% endif %}>The Codex</a></li>
-                <li><a href="{{ get_url(path='@/lab/_index.md', lang=lang) }}" {% if current_path=="/lab/" or
-                        current_path=="/fr/lab/" %}class="active" {% endif %}>The Lab</a></li>
+                <li><a href="{{ get_url(path='@/_index.md', lang=lang) }}"
+                    {% if current_path == "/" or current_path == "/fr/" %}class="active" aria-current="page"{% endif %}>
+                    {% if lang == "fr" %}Home{% else %}Home{% endif %}</a></li>
+                <li><a href="{{ get_url(path='@/trix-lab/_index.md', lang=lang) }}"
+                    {% if current_path is containing("/trix-lab") %}class="active" aria-current="page"{% endif %}>
+                    Trix's Lab</a></li>
+                <li><a href="{{ get_url(path='@/grimble-codex/_index.md', lang=lang) }}"
+                    {% if current_path is containing("/grimble-codex") %}class="active" aria-current="page"{% endif %}>
+                    Grimble's Codex</a></li>
+                <li><a href="{{ get_url(path='@/veil-vault/_index.md', lang=lang) }}"
+                    {% if current_path is containing("/veil-vault") %}class="active" aria-current="page"{% endif %}>
+                    Veil's Vault</a></li>
             </ul>
+            <a href="https://cal.com/maeevick/firsttime" class="cta nav-cta" target="_blank" rel="noopener">Book a call</a>
         </nav>
     </header>
 
@@ -86,10 +96,10 @@
 
     <footer>
         <p>
-            © 2025 Maeevick -
-            <a href="https://github.com/Maeevick/maeevick.zola" target="_blank">GitHub</a> |
-            <a href="https://www.linkedin.com/in/aurel-estoup/" target="_blank">LinkedIn</a> |
-            <a href="https://bsky.app/profile/maeevick.bsky.social" target="_blank">BlueSky</a>
+            © 2026 Maeevick —
+            <a href="https://github.com/Maeevick/maeevick.zola" target="_blank" rel="noopener">GitHub</a> |
+            <a href="https://www.linkedin.com/in/aurel-estoup/" target="_blank" rel="noopener">LinkedIn</a> |
+            <a href="https://bsky.app/profile/maeevick.bsky.social" target="_blank" rel="noopener">BlueSky</a>
         </p>
     </footer>
 </body>

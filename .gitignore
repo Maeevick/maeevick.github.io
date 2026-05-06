@@ -12,5 +12,5 @@ pkg/
 
 public/
 lighthouse/
-
+.claude
 .env

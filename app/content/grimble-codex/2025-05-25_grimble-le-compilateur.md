@@ -2,6 +2,7 @@
 title = "Grimbleshanks Mortimer Quill - Self-Analysis of the Archivist of Neglected Knowledge"
 description = "Personal observations of an erudite goblin on his own peculiarities and classification methods"
 date = 2025-05-25
+slug = "grimble-archivist"
 [extra]
 locale = "en_US"
 +++

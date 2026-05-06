@@ -1,19 +1,43 @@
 {% extends "base.html" %}
+{% import "macros/components.html" as components %}
+
 {% block title %}{{ page.title }}{% endblock %}
-{%block content %}
+{% block description %}{{ page.description }}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_title %}{{ page.title }}{% endblock %}
+{% block og_description %}{{ page.description }}{% endblock %}
+
+{% block content %}
+
+{% set section_path = "" %}
+{% set section_label = "" %}
+{% if current_path is containing("/trix-lab") %}
+  {% set section_path = "@/trix-lab/_index.md" %}
+  {% set section_label = "Trix's Lab" %}
+{% elif current_path is containing("/grimble-codex") %}
+  {% set section_path = "@/grimble-codex/_index.md" %}
+  {% set section_label = "Grimble's Codex" %}
+{% elif current_path is containing("/veil-vault") %}
+  {% set section_path = "@/veil-vault/_index.md" %}
+  {% set section_label = "Veil's Vault" %}
+{% endif %}
+
 <article>
   <header class="article-header">
-    <h1>
-      {{ page.title }}
-    </h1>
-
+    {% if section_path %}
+    <p class="article-breadcrumb">
+      <a href="{{ get_url(path=section_path, lang=lang) }}">← {{ section_label }}</a>
+    </p>
+    {% endif %}
+    <h1 class="section-title">{{ page.title }}</h1>
     {% if page.date %}
-    <div>
-      {{ page.date | date(format="%B %e, %Y") }}
-    </div>
+    <p class="article-date">
+      {% if lang == "fr" %}{{ page.date | date(format="%d %B %Y", locale="fr_FR") }}{% else %}{{ page.date | date(format="%B %e, %Y", locale="en_US") }}{% endif %}
+    </p>
     {% endif %}
   </header>
 
-  <div> {{ page.content | safe }} </div>
+  <div>{{ page.content | safe }}</div>
 </article>
+
 {% endblock %}

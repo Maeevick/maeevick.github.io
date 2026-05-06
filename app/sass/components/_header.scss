@@ -1,53 +1,111 @@
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: $color-dark;
-  padding: 1rem;
+  background-color: var(--color-surface);
+  border-bottom: 2px solid;
+  border-image: var(--gradient-line) 1;
+  padding: 0 1rem;
   position: sticky;
   top: 0;
-  height: 60px;
+  min-height: 60px;
   z-index: 100;
 }
 
+// ── Brand block: goblin + two-line text ──────────────────────────────────────
 .brand {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.brand-link {
+  display: flex;
+  flex-shrink: 0;
+  text-decoration: none;
+
+  &:hover { text-decoration: none; }
 
   .logo {
-    font-size: 1.5rem;
-    margin-right: 0.5rem;
-  }
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--color-primary);
+    transition: transform 0.2s ease, border-color 0.2s ease;
 
-  .hook {
-    font-size: 0.75rem;
-    color: $color-light;
+    &:hover {
+      transform: rotate(-8deg) scale(1.1);
+      border-color: var(--color-accent-a);
+    }
   }
 }
 
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  line-height: 1;
+}
+
+.hook {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  letter-spacing: 0.04em;
+}
+
+.brand-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+// ── Lang controls ─────────────────────────────────────────────────────────────
 .lang-switcher {
   display: flex;
   align-items: center;
-
-  a {
-    display: flex;
-    align-items: center;
-    margin-right: 0.5rem;
-    opacity: 0.5;
-    transition: opacity 0.2s ease;
-
-    &:hover,
-    &.active {
-      opacity: 1;
-      border-bottom: none;
-    }
-
-    &.active {
-      pointer-events: none;
-    }
-  }
+  gap: 0;
 }
 
+.lang-switcher a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0.25rem 0.3rem;
+  font-size: 0.95rem;
+  opacity: 0.4;
+  transition: opacity 0.15s ease;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1;
+
+  &:hover { opacity: 0.8; text-decoration: none; }
+  &.active { opacity: 1; pointer-events: none; }
+}
+
+
+// ── Nav CTA — hidden on desktop, revealed inside open mobile menu ─────────────
+.main-nav .nav-cta {
+  display: none;
+}
+
+// ── Main nav ──────────────────────────────────────────────────────────────────
 .main-nav {
   display: flex;
 
@@ -56,120 +114,119 @@
     list-style: none;
     padding: 0;
     margin: 0;
-    gap: 1.5rem;
+    gap: 1.25rem;
   }
 
   a {
     display: block;
-    color: $color-gray-400;
+    color: var(--color-primary);          // orange default
     text-decoration: none;
-    font-size: 0.875rem;
-    font-weight: 500;
+    font-family: var(--font-display);
+    font-size: 1rem;
     padding: 0.5rem 0;
-    transition: all 0.2s ease;
     border-bottom: 2px solid transparent;
+    transition: color 0.15s ease;
 
-    &:hover,
-    &.active {
-      color: $color-primary;
-      border-bottom: 2px solid $color-primary;
+    &:hover {
+      color: var(--color-accent-b);       // blue on hover
       text-decoration: none;
+      border-bottom: 2px solid var(--color-accent-b);
     }
 
-    @media (min-width: $breakpoint-md) {
-      font-size: 1rem;
+    &.active {
+      color: var(--color-primary);        // stays orange
+      text-decoration: none;
+      // Gradient pink→orange underline
+      border-bottom: 2px solid;
+      border-image: var(--gradient-line) 1;
     }
   }
 }
 
-.menu-toggle {
-  display: none;
-}
-
+// ── Hamburger (mobile) ────────────────────────────────────────────────────────
 .hamburger {
   width: 24px;
   height: 24px;
   position: relative;
   cursor: pointer;
   display: none;
+  flex-shrink: 0;
 
   span {
     display: block;
     position: absolute;
     height: 2px;
     width: 100%;
-    background: $color-light;
+    background: var(--color-text);
     border-radius: 2px;
-    opacity: 1;
-    left: 0;
-    transform: rotate(0deg);
     transition: 0.25s ease-in-out;
 
-    &:nth-child(1) {
-      top: 6px;
-    }
-
-    &:nth-child(2) {
-      top: 12px;
-    }
-
-    &:nth-child(3) {
-      top: 18px;
-    }
+    &:nth-child(1) { top: 6px; }
+    &:nth-child(2) { top: 12px; }
+    &:nth-child(3) { top: 18px; }
   }
 }
 
-@media (max-width: ($breakpoint-md - 1)) {
-  .hamburger {
-    display: block;
-  }
+@media (max-width: #{$breakpoint-md - 1}) {
+  .hamburger { display: block; }
 
   .main-nav {
     position: absolute;
     top: 100%;
     left: 0;
     right: 0;
-    background-color: $color-dark;
+    background-color: var(--color-surface);
     padding: 0 1rem;
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.3s ease, padding 0.3s ease;
-    border-top: 1px solid $color-gray-600;
+    border-top: 1px solid var(--color-border);
+    flex-direction: column;
+    align-items: stretch;
 
     ul {
       flex-direction: column;
-      gap: 0.75rem;
+      gap: 0.5rem;
     }
 
     a {
+      border-bottom: none;
+
       &:hover,
       &.active {
         border-bottom: none;
-        border-left: 2px solid $color-primary;
+        border-left: 2px solid var(--color-primary);
+        border-image: none;
         padding-left: 0.5rem;
+        color: var(--color-primary);
+      }
+
+      &.active {
+        border-left: 2px solid;
+        border-image: var(--gradient-line) 1;
       }
     }
   }
 
-  .menu-toggle:checked ~ .main-nav {
-    max-height: 300px;
+  .main-nav .nav-cta {
+    display: block;
+    width: calc(100% - 1rem);
+    text-align: center;
+    margin: 0.75rem auto 0.25rem;
+    box-sizing: border-box;
+    color: #18181b;
+
+    &:hover { color: #18181b; }
+  }
+
+  #menu-toggle:checked ~ .main-nav {
+    max-height: 420px;
     padding: 1rem;
   }
 
-  .menu-toggle:checked ~ .hamburger span {
-    &:nth-child(1) {
-      top: 12px;
-      transform: rotate(135deg);
-    }
-
-    &:nth-child(2) {
-      opacity: 0;
-      left: -60px;
-    }
-
-    &:nth-child(3) {
-      top: 12px;
-      transform: rotate(-135deg);
-    }
+  #menu-toggle:checked ~ label.hamburger span {
+    &:nth-child(1) { top: 12px; transform: rotate(135deg); }
+    &:nth-child(2) { opacity: 0; left: -60px; }
+    &:nth-child(3) { top: 12px; transform: rotate(-135deg); }
   }
 }
