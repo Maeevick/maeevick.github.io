@@ -4,7 +4,7 @@
 ![Grimble Running Build](https://github.com/Maeevick/maeevick.github.io/workflows/Build%20and%20Deploy%20Grimble%20Running%20Mini%20Game/badge.svg)
 ![License](https://img.shields.io/badge/License-MIT%20%2B%20CC%20BY--NC--SA%204.0-blue.svg)
 
-Personal site of Aurel Estoup (Maeevick) — CTPO as a Service for pre-PMF startups & Tech4Good, crossroads of professional and creative worlds.
+Personal site of Aurel Estoup (Maeevick) — CTPO-as-a-Service for pre-PMF startups & Tech4Good, crossroads of professional and creative worlds.
 
 https://www.maeevick.com
 

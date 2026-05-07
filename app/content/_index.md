@@ -1,6 +1,6 @@
 +++
 title = "Home"
-description = "Ship Fast. Build Right. Find PMF. — CTPO as a Service for Pre-PMF Startups & Tech4Good"
+description = "Ship Fast. Build Right. Find PMF. — CTPO-as-a-Service for Pre-PMF Startups & Tech4Good"
 template = "index.html"
 [extra]
 locale = "en_US"
@@ -8,7 +8,7 @@ locale = "en_US"
 
 # Ship Fast. Build Right. Find PMF.
 
-**CTPO as a Service** for Pre-PMF Startups & Tech4Good
+**CTPO-as-a-Service** for Pre-PMF Startups & Tech4Good
 
 Lean Product Management · Extreme Programming · DevSecOps
 
