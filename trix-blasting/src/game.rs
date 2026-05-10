@@ -44,6 +44,13 @@ const ALIEN_COLORS: [Color; 6] = [
     Color::linear_rgb(0.7, 0.2, 0.9),
 ];
 
+#[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum GameState {
+    #[default]
+    Running,
+    GameOver,
+}
+
 #[derive(Component)]
 struct Trix;
 
@@ -67,6 +74,9 @@ struct PlayerBullet;
 
 #[derive(Component)]
 struct CooldownBar;
+
+#[derive(Component)]
+struct GameOverText;
 
 #[derive(Resource)]
 struct GameSpeed {
@@ -127,6 +137,11 @@ pub fn speed_after_miss(current: f32) -> f32 {
     current + SPEED_PER_PLAYER_MISS
 }
 
+pub fn aabb_overlaps(pos_a: Vec2, half_a: Vec2, pos_b: Vec2, half_b: Vec2) -> bool {
+    (pos_a.x - pos_b.x).abs() < half_a.x + half_b.x
+        && (pos_a.y - pos_b.y).abs() < half_a.y + half_b.y
+}
+
 pub fn create_app(for_wasm: bool) -> App {
     let window = if for_wasm {
         Window {
@@ -153,6 +168,7 @@ pub fn create_app(for_wasm: bool) -> App {
     .insert_resource(GameSpeed::new())
     .insert_resource(SwarmState::new())
     .insert_resource(PlayerShootCooldown(0.0))
+    .init_state::<GameState>()
     .add_systems(Startup, setup)
     .add_systems(
         Update,
@@ -164,8 +180,12 @@ pub fn create_app(for_wasm: bool) -> App {
             move_swarm,
             handle_alien_shooting,
             move_alien_bullets,
-        ),
-    );
+            check_bullet_alien_collisions,
+            check_game_over_conditions,
+        )
+            .run_if(in_state(GameState::Running)),
+    )
+    .add_systems(OnEnter(GameState::GameOver), on_game_over_enter);
     app
 }
 
@@ -242,6 +262,102 @@ fn spawn_alien_wave(commands: &mut Commands, swarm: &SwarmState, row_count: usiz
             }
         }
     }
+}
+
+fn check_bullet_alien_collisions(
+    mut commands: Commands,
+    bullets: Query<(Entity, &Transform), With<PlayerBullet>>,
+    aliens: Query<(Entity, &Transform), With<Alien>>,
+    mut game_speed: ResMut<GameSpeed>,
+) {
+    let half_bullet = Vec2::new(PLAYER_BULLET_WIDTH / 2.0, PLAYER_BULLET_HEIGHT / 2.0);
+    let half_alien = Vec2::splat(ALIEN_RENDERED_SIZE / 2.0);
+
+    let mut hit_bullets = std::collections::HashSet::new();
+    let mut hit_aliens = std::collections::HashSet::new();
+
+    for (bullet_entity, bullet_transform) in bullets.iter() {
+        if hit_bullets.contains(&bullet_entity) {
+            continue;
+        }
+        for (alien_entity, alien_transform) in aliens.iter() {
+            if hit_aliens.contains(&alien_entity) {
+                continue;
+            }
+            if aabb_overlaps(
+                bullet_transform.translation.truncate(),
+                half_bullet,
+                alien_transform.translation.truncate(),
+                half_alien,
+            ) {
+                hit_bullets.insert(bullet_entity);
+                hit_aliens.insert(alien_entity);
+                break;
+            }
+        }
+    }
+
+    let hit_count = hit_aliens.len();
+    for entity in hit_bullets.iter().chain(hit_aliens.iter()) {
+        commands.entity(*entity).despawn();
+    }
+    for _ in 0..hit_count {
+        game_speed.current = speed_after_hit(game_speed.current);
+    }
+}
+
+fn check_game_over_conditions(
+    aliens: Query<&Transform, With<Alien>>,
+    alien_bullets: Query<&Transform, With<AlienBullet>>,
+    trix_query: Query<&Transform, With<Trix>>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    let Ok(trix_transform) = trix_query.single() else {
+        return;
+    };
+
+    let trix_pos = trix_transform.translation.truncate();
+    let half_trix = Vec2::splat(TRIX_RENDERED_SIZE / 2.0);
+    let half_alien_bullet = Vec2::new(ALIEN_BULLET_WIDTH / 2.0, ALIEN_BULLET_HEIGHT / 2.0);
+    let half_alien = Vec2::splat(ALIEN_RENDERED_SIZE / 2.0);
+
+    for bullet_transform in alien_bullets.iter() {
+        if aabb_overlaps(
+            bullet_transform.translation.truncate(),
+            half_alien_bullet,
+            trix_pos,
+            half_trix,
+        ) {
+            next_state.set(GameState::GameOver);
+            return;
+        }
+    }
+
+    for alien_transform in aliens.iter() {
+        let alien_pos = alien_transform.translation.truncate();
+        if aabb_overlaps(alien_pos, half_alien, trix_pos, half_trix) {
+            next_state.set(GameState::GameOver);
+            return;
+        }
+        if alien_transform.translation.y - ALIEN_RENDERED_SIZE / 2.0 <= BASELINE_Y {
+            next_state.set(GameState::GameOver);
+            return;
+        }
+    }
+}
+
+fn on_game_over_enter(mut commands: Commands) {
+    commands.spawn((
+        Text2d::new("GAME OVER"),
+        TextFont {
+            font_size: 48.0,
+            ..default()
+        },
+        TextColor(Color::WHITE),
+        Transform::from_xyz(0.0, 0.0, 10.0),
+        GameOverText,
+    ));
+    println!("Game Over!");
 }
 
 fn handle_alien_shooting(
@@ -506,5 +622,35 @@ mod tests {
     fn given_any_speed_when_bullet_hits_alien_then_speed_increases_by_fixed_penalty() {
         let result = speed_after_hit(120.0);
         assert!((result - 121.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn given_overlapping_boxes_when_checking_aabb_then_returns_true() {
+        assert!(aabb_overlaps(
+            Vec2::ZERO,
+            Vec2::splat(10.0),
+            Vec2::new(5.0, 5.0),
+            Vec2::splat(10.0)
+        ));
+    }
+
+    #[test]
+    fn given_separated_boxes_when_checking_aabb_then_returns_false() {
+        assert!(!aabb_overlaps(
+            Vec2::ZERO,
+            Vec2::splat(5.0),
+            Vec2::new(20.0, 0.0),
+            Vec2::splat(5.0)
+        ));
+    }
+
+    #[test]
+    fn given_touching_edges_when_checking_aabb_then_returns_false() {
+        assert!(!aabb_overlaps(
+            Vec2::ZERO,
+            Vec2::splat(5.0),
+            Vec2::new(10.0, 0.0),
+            Vec2::splat(5.0)
+        ));
     }
 }
