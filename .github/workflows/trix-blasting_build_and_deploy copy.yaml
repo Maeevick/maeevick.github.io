@@ -1,0 +1,62 @@
+name: Build and Deploy Trix Blasting Mini Game
+
+on:
+  push:
+    paths:
+      - "trix-blasting/**"
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: trix-blasting
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: trix-blasting
+
+      - name: Install wasm-bindgen-cli
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli
+
+      - name: Build WASM
+        env:
+          RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
+        run: make wasm-release
+
+      - name: Upload to Scaleway Object Storage
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SCW_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SCW_SECRET_KEY }}
+          AWS_DEFAULT_REGION: fr-par
+        run: |
+          aws s3 cp pkg/trix_blasting.js s3://trix-blasting/pkg/ \
+            --content-type "application/javascript" \
+            --acl public-read \
+            --endpoint-url https://s3.fr-par.scw.cloud
+
+          aws s3 cp pkg/trix_blasting_bg.wasm s3://trix-blasting/pkg/ \
+            --content-type "application/wasm" \
+            --acl public-read \
+            --endpoint-url https://s3.fr-par.scw.cloud
+
+          aws s3 cp index.html s3://trix-blasting/ \
+            --content-type "text/html" \
+            --acl public-read \
+            --endpoint-url https://s3.fr-par.scw.cloud
