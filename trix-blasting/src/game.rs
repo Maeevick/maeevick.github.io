@@ -1,4 +1,5 @@
 use bevy::{prelude::*, window::PresentMode};
+use rand::RngExt;
 
 pub const WINDOW_WIDTH: f32 = 400.0;
 pub const WINDOW_HEIGHT: f32 = 800.0;
@@ -19,12 +20,29 @@ const WALL_MARGIN: f32 = 5.0;
 const SWARM_START_Y: f32 = WINDOW_HEIGHT / 2.0 - 60.0;
 
 const BASE_GAME_SPEED: f32 = 50.0;
+const SPEED_PER_HIT: f32 = 1.0;
 const SPEED_PER_PLAYER_MISS: f32 = 5.0;
 
 const PLAYER_BULLET_WIDTH: f32 = 4.0;
 const PLAYER_BULLET_HEIGHT: f32 = 12.0;
 const PLAYER_BULLET_BASE_SPEED: f32 = 200.0;
 const PLAYER_SHOOT_COOLDOWN_SECS: f32 = 0.25;
+
+const ALIEN_BULLET_WIDTH: f32 = 4.0;
+const ALIEN_BULLET_HEIGHT: f32 = 10.0;
+const ALIEN_BULLET_BASE_SPEED: f32 = 150.0;
+const ALIEN_SHOOT_INTERVAL_MIN: f32 = 1.5;
+const ALIEN_SHOOT_INTERVAL_MAX: f32 = 3.0;
+const ALIEN_SHOOTER_PROBABILITY: f32 = 0.3;
+
+const ALIEN_COLORS: [Color; 6] = [
+    Color::linear_rgb(1.0, 0.2, 0.2),
+    Color::linear_rgb(1.0, 0.6, 0.1),
+    Color::linear_rgb(0.9, 0.9, 0.1),
+    Color::linear_rgb(0.2, 0.9, 0.2),
+    Color::linear_rgb(0.1, 0.5, 1.0),
+    Color::linear_rgb(0.7, 0.2, 0.9),
+];
 
 #[derive(Component)]
 struct Trix;
@@ -33,7 +51,16 @@ struct Trix;
 struct Alien {
     col: usize,
     row: usize,
+    color: Color,
 }
+
+#[derive(Component)]
+struct AlienShooter {
+    timer: Timer,
+}
+
+#[derive(Component)]
+struct AlienBullet;
 
 #[derive(Component)]
 struct PlayerBullet;
@@ -74,6 +101,13 @@ impl SwarmState {
     }
 }
 
+type CooldownBarQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Transform, &'static mut Sprite),
+    (With<CooldownBar>, Without<Trix>),
+>;
+
 pub fn alien_col_x(col: usize, swarm_center_x: f32) -> f32 {
     let total_grid_width =
         ALIEN_COLS as f32 * ALIEN_RENDERED_SIZE + (ALIEN_COLS - 1) as f32 * ALIEN_GAP;
@@ -83,6 +117,10 @@ pub fn alien_col_x(col: usize, swarm_center_x: f32) -> f32 {
 
 pub fn alien_row_y(row: usize, swarm_center_y: f32) -> f32 {
     swarm_center_y - row as f32 * ALIEN_DROP_DISTANCE
+}
+
+pub fn speed_after_hit(current: f32) -> f32 {
+    current + SPEED_PER_HIT
 }
 
 pub fn speed_after_miss(current: f32) -> f32 {
@@ -124,6 +162,8 @@ pub fn create_app(for_wasm: bool) -> App {
             move_player_bullets,
             update_cooldown_bar,
             move_swarm,
+            handle_alien_shooting,
+            move_alien_bullets,
         ),
     );
     app
@@ -174,19 +214,83 @@ fn setup(
 }
 
 fn spawn_alien_wave(commands: &mut Commands, swarm: &SwarmState, row_count: usize) {
+    let mut rng = rand::rng();
+
     for row in 0..row_count {
         for col in 0..ALIEN_COLS {
             let x = alien_col_x(col, swarm.center_x);
             let y = alien_row_y(row, swarm.center_y);
-            commands.spawn((
+            let color = ALIEN_COLORS[rng.random_range(0..ALIEN_COLORS.len())];
+            let is_shooter = rng.random::<f32>() < ALIEN_SHOOTER_PROBABILITY;
+
+            let mut entity = commands.spawn((
                 Sprite {
-                    color: Color::linear_rgb(0.8, 0.3, 0.1),
+                    color,
                     custom_size: Some(Vec2::splat(ALIEN_RENDERED_SIZE)),
                     ..default()
                 },
                 Transform::from_xyz(x, y, 1.0),
-                Alien { col, row },
+                Alien { col, row, color },
             ));
+
+            if is_shooter {
+                let interval =
+                    rng.random_range(ALIEN_SHOOT_INTERVAL_MIN..ALIEN_SHOOT_INTERVAL_MAX);
+                entity.insert(AlienShooter {
+                    timer: Timer::from_seconds(interval, TimerMode::Repeating),
+                });
+            }
+        }
+    }
+}
+
+fn handle_alien_shooting(
+    mut commands: Commands,
+    time: Res<Time>,
+    game_speed: Res<GameSpeed>,
+    mut shooter_query: Query<(&Transform, &Alien, &mut AlienShooter)>,
+) {
+    let speed_factor = BASE_GAME_SPEED / game_speed.current;
+
+    for (transform, alien, mut shooter) in shooter_query.iter_mut() {
+        shooter.timer.tick(time.delta());
+        if shooter.timer.just_finished() {
+            commands.spawn((
+                Sprite {
+                    color: alien.color,
+                    custom_size: Some(Vec2::new(ALIEN_BULLET_WIDTH, ALIEN_BULLET_HEIGHT)),
+                    ..default()
+                },
+                Transform::from_xyz(
+                    transform.translation.x,
+                    transform.translation.y
+                        - ALIEN_RENDERED_SIZE / 2.0
+                        - ALIEN_BULLET_HEIGHT / 2.0,
+                    2.0,
+                ),
+                AlienBullet,
+            ));
+            let new_interval = shooter.timer.duration().as_secs_f32() * speed_factor;
+            shooter
+                .timer
+                .set_duration(std::time::Duration::from_secs_f32(new_interval.max(0.2)));
+        }
+    }
+}
+
+fn move_alien_bullets(
+    mut commands: Commands,
+    mut bullets: Query<(Entity, &mut Transform), With<AlienBullet>>,
+    game_speed: Res<GameSpeed>,
+    time: Res<Time>,
+) {
+    let bullet_speed = ALIEN_BULLET_BASE_SPEED + game_speed.current;
+
+    for (entity, mut transform) in bullets.iter_mut() {
+        transform.translation.y -= bullet_speed * time.delta_secs();
+
+        if transform.translation.y < -WINDOW_HEIGHT / 2.0 - ALIEN_BULLET_HEIGHT {
+            commands.entity(entity).despawn();
         }
     }
 }
@@ -252,7 +356,7 @@ fn move_player_bullets(
 fn update_cooldown_bar(
     cooldown: Res<PlayerShootCooldown>,
     trix_query: Query<&Transform, With<Trix>>,
-    mut bar_query: Query<(&mut Transform, &mut Sprite), (With<CooldownBar>, Without<Trix>)>,
+    mut bar_query: CooldownBarQuery,
 ) {
     let fraction_ready = 1.0 - (cooldown.0 / PLAYER_SHOOT_COOLDOWN_SECS).clamp(0.0, 1.0);
     let bar_width = TRIX_RENDERED_SIZE * fraction_ready;
@@ -260,7 +364,8 @@ fn update_cooldown_bar(
     for trix_transform in trix_query.iter() {
         for (mut bar_transform, mut sprite) in bar_query.iter_mut() {
             bar_transform.translation.x = trix_transform.translation.x;
-            bar_transform.translation.y = trix_transform.translation.y - TRIX_RENDERED_SIZE / 2.0 - 5.0;
+            bar_transform.translation.y =
+                trix_transform.translation.y - TRIX_RENDERED_SIZE / 2.0 - 5.0;
             sprite.custom_size = Some(Vec2::new(bar_width.max(0.01), 3.0));
         }
     }
@@ -389,5 +494,17 @@ mod tests {
     fn given_any_speed_when_player_misses_then_speed_increases_by_fixed_penalty() {
         let result = speed_after_miss(120.0);
         assert!((result - 125.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn given_base_speed_when_bullet_hits_alien_then_speed_increases_by_hit_penalty() {
+        let result = speed_after_hit(BASE_GAME_SPEED);
+        assert!((result - (BASE_GAME_SPEED + SPEED_PER_HIT)).abs() < 0.01);
+    }
+
+    #[test]
+    fn given_any_speed_when_bullet_hits_alien_then_speed_increases_by_fixed_penalty() {
+        let result = speed_after_hit(120.0);
+        assert!((result - 121.0).abs() < 0.01);
     }
 }
