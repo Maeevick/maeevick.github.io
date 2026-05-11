@@ -1,4 +1,10 @@
-use bevy::{prelude::*, window::PresentMode};
+use bevy::{
+    asset::RenderAssetUsages,
+    image::ImageSampler,
+    prelude::*,
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+    window::PresentMode,
+};
 use rand::RngExt;
 
 pub const WINDOW_WIDTH: f32 = 400.0;
@@ -38,14 +44,6 @@ const ALIEN_SHOOTER_PROBABILITY: f32 = 0.3;
 const WAVE_SPLASH_DURATION_SECS: f32 = 1.5;
 const ALIEN_FADE_DURATION_SECS: f32 = 0.3;
 
-const ALIEN_COLORS: [Color; 6] = [
-    Color::linear_rgb(1.0, 0.2, 0.2),
-    Color::linear_rgb(1.0, 0.6, 0.1),
-    Color::linear_rgb(0.9, 0.9, 0.1),
-    Color::linear_rgb(0.2, 0.9, 0.2),
-    Color::linear_rgb(0.1, 0.5, 1.0),
-    Color::linear_rgb(0.7, 0.2, 0.9),
-];
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GameState {
@@ -210,6 +208,94 @@ fn rows_for_wave(wave: u32) -> usize {
     rows_for_wave_formula(wave, rand_factor)
 }
 
+fn hue_to_rgb(h: f32) -> [f32; 3] {
+    let h = h.rem_euclid(360.0);
+    let x = 1.0 - ((h / 60.0).rem_euclid(2.0) - 1.0).abs();
+    match (h / 60.0) as u32 {
+        0 => [1.0, x, 0.0],
+        1 => [x, 1.0, 0.0],
+        2 => [0.0, 1.0, x],
+        3 => [0.0, x, 1.0],
+        4 => [x, 0.0, 1.0],
+        _ => [1.0, 0.0, x],
+    }
+}
+
+pub fn pick_rainbow_color(rng: &mut impl rand::RngExt) -> [u8; 4] {
+    let hue: f32 = rng.random_range(0.0..360.0);
+    let brightness: f32 = rng.random_range(0.7..1.0);
+    let [r, g, b] = hue_to_rgb(hue);
+    [
+        (r * brightness * 255.0) as u8,
+        (g * brightness * 255.0) as u8,
+        (b * brightness * 255.0) as u8,
+        255,
+    ]
+}
+
+pub fn pick_special_colors(rng: &mut impl rand::RngExt) -> ([u8; 4], [u8; 4]) {
+    (pick_rainbow_color(rng), pick_rainbow_color(rng))
+}
+
+const ALIEN_SHAPES: [[bool; 25]; 3] = [
+    // crab
+    [
+        false, true,  false, true,  false,
+        true,  true,  true,  true,  true,
+        true,  true,  false, true,  true,
+        false, true,  true,  true,  false,
+        true,  false, false, false, true,
+    ],
+    // squid
+    [
+        false, false, true,  false, false,
+        false, true,  true,  true,  false,
+        true,  true,  false, true,  true,
+        true,  false, true,  false, true,
+        false, true,  false, true,  false,
+    ],
+    // octopus
+    [
+        false, true,  true,  true,  false,
+        true,  true,  true,  true,  true,
+        true,  false, true,  false, true,
+        true,  true,  true,  true,  true,
+        false, true,  false, true,  false,
+    ],
+];
+
+pub fn alien_pixel_data(color: [u8; 4], shape: &[bool; 25]) -> Vec<u8> {
+    shape
+        .iter()
+        .flat_map(|&filled| if filled { color } else { [0, 0, 0, 0] })
+        .collect()
+}
+
+pub fn special_alien_pixel_data(color_a: [u8; 4], color_b: [u8; 4]) -> Vec<u8> {
+    let mut data = Vec::with_capacity(100);
+    for row in 0..5usize {
+        for col in 0..5usize {
+            let t = ((row + col) as f32 / 8.0).clamp(0.0, 1.0);
+            for ch in 0..4 {
+                data.push((color_a[ch] as f32 * (1.0 - t) + color_b[ch] as f32 * t) as u8);
+            }
+        }
+    }
+    data
+}
+
+fn make_alien_image(images: &mut Assets<Image>, pixel_data: Vec<u8>) -> Handle<Image> {
+    let mut image = Image::new(
+        Extent3d { width: 5, height: 5, depth_or_array_layers: 1 },
+        TextureDimension::D2,
+        pixel_data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    image.sampler = ImageSampler::nearest();
+    images.add(image)
+}
+
 pub fn create_app(for_wasm: bool) -> App {
     let window = if for_wasm {
         Window {
@@ -288,6 +374,7 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut images: ResMut<Assets<Image>>,
     swarm: Res<Swarm>,
 ) {
     commands.spawn(Camera2d);
@@ -354,34 +441,43 @@ fn setup(
         SpeedDisplay,
     ));
 
-    spawn_alien_wave(&mut commands, &swarm, 1, false);
+    spawn_alien_wave(&mut commands, &mut images, &swarm, 1, false);
 
     println!("Trix Blasting ready.");
 }
 
-fn spawn_alien_wave(commands: &mut Commands, swarm: &Swarm, row_count: usize, fade_in: bool) {
+fn spawn_alien_wave(
+    commands: &mut Commands,
+    images: &mut Assets<Image>,
+    swarm: &Swarm,
+    row_count: usize,
+    fade_in: bool,
+) {
     let mut rng = rand::rng();
 
     for row in 0..row_count {
         for col in 0..ALIEN_COLS {
             let x = alien_col_x(col, swarm.center_x);
             let y = alien_row_y(row, swarm.center_y);
-            let color = ALIEN_COLORS[rng.random_range(0..ALIEN_COLORS.len())];
+            let color_bytes = pick_rainbow_color(&mut rng);
+            let [r, g, b, _] = color_bytes;
+            let alien_color =
+                Color::srgba(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0);
             let is_shooter = rng.random::<f32>() < ALIEN_SHOOTER_PROBABILITY;
-            let sprite_color = if fade_in {
-                color.with_alpha(0.0)
-            } else {
-                color
-            };
+            let tint = if fade_in { Color::WHITE.with_alpha(0.0) } else { Color::WHITE };
+            let shape_idx = rng.random_range(0..ALIEN_SHAPES.len());
+            let image_handle =
+                make_alien_image(images, alien_pixel_data(color_bytes, &ALIEN_SHAPES[shape_idx]));
 
             let mut entity = commands.spawn((
                 Sprite {
-                    color: sprite_color,
+                    image: image_handle,
+                    color: tint,
                     custom_size: Some(Vec2::splat(ALIEN_RENDERED_SIZE)),
                     ..default()
                 },
                 Transform::from_xyz(x, y, 1.0),
-                Alien { col, row, color },
+                Alien { col, row, color: alien_color },
             ));
 
             if fade_in {
@@ -422,6 +518,7 @@ fn on_wave_splash_enter(
     mut wave: ResMut<Wave>,
     mut splash_timer: ResMut<WaveSplashTimer>,
     all_ephemeral: WaveTransitionEntities,
+    mut images: ResMut<Assets<Image>>,
 ) {
     splash_timer.0 = Timer::from_seconds(WAVE_SPLASH_DURATION_SECS, TimerMode::Once);
     *swarm = Swarm::new();
@@ -433,7 +530,7 @@ fn on_wave_splash_enter(
 
     let row_count = rows_for_wave(wave.number);
     wave.spawn_count = row_count * ALIEN_COLS;
-    spawn_alien_wave(&mut commands, &swarm, row_count, true);
+    spawn_alien_wave(&mut commands, &mut images, &swarm, row_count, true);
 
     commands.spawn((
         Text2d::new(format!("Wave {}", wave.number)),
@@ -928,5 +1025,35 @@ mod tests {
     #[test]
     fn given_large_wave_with_full_factor_when_computing_rows_then_caps_at_12() {
         assert_eq!(rows_for_wave_formula(100, 1.0), 12);
+    }
+
+    #[test]
+    fn given_full_shape_when_creating_alien_pixel_data_then_all_25_pixels_match_color() {
+        let color = [255u8, 128, 0, 255];
+        let data = alien_pixel_data(color, &[true; 25]);
+        assert_eq!(data.len(), 100);
+        for i in 0..25 {
+            assert_eq!(&data[i * 4..(i + 1) * 4], &color);
+        }
+    }
+
+    #[test]
+    fn given_false_pixel_in_shape_when_creating_alien_pixel_data_then_pixel_is_transparent() {
+        let color = [255u8, 0, 0, 255];
+        let mut shape = [true; 25];
+        shape[0] = false;
+        let data = alien_pixel_data(color, &shape);
+        assert_eq!(&data[0..4], &[0u8, 0, 0, 0]);
+        assert_eq!(&data[4..8], &color);
+    }
+
+    #[test]
+    fn given_two_colors_when_creating_special_pixel_data_then_corners_match() {
+        let black = [0u8, 0, 0, 255];
+        let white = [255u8, 255, 255, 255];
+        let data = special_alien_pixel_data(black, white);
+        assert_eq!(data.len(), 100);
+        assert_eq!(&data[0..4], &black);
+        assert_eq!(&data[96..100], &white);
     }
 }
