@@ -974,42 +974,58 @@ fn move_alien_bullets(
 fn handle_trix_shooting(
     keyboard: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
+    touches: Res<Touches>,
     mut commands: Commands,
     trix_query: Query<&Transform, With<Trix>>,
     mut cooldown: ResMut<PlayerShootCooldown>,
     time: Res<Time>,
 ) {
     cooldown.0 = (cooldown.0 - time.delta_secs()).max(0.0);
-
     if cooldown.0 > 0.0 {
         return;
     }
 
-    let wants_to_shoot =
-        keyboard.just_pressed(KeyCode::Space) || mouse.just_pressed(MouseButton::Left);
+    let Ok(trix_transform) = trix_query.single() else {
+        return;
+    };
+
+    let trix_wx = trix_transform.translation.x + WINDOW_WIDTH / 2.0;
+    let trix_wy = WINDOW_HEIGHT / 2.0 - trix_transform.translation.y;
+    let half = TRIX_RENDERED_SIZE / 2.0;
+
+    let touch_shoot = touches.iter_just_pressed().any(|touch| {
+        let pos = touch.position();
+        if pos.y > WINDOW_HEIGHT - 40.0
+            && pos.x >= WINDOW_WIDTH / 3.0
+            && pos.x <= 2.0 * WINDOW_WIDTH / 3.0
+        {
+            return true;
+        }
+        (pos.x - trix_wx).abs() < half && (pos.y - trix_wy).abs() < half
+    });
+
+    let wants_to_shoot = keyboard.just_pressed(KeyCode::Space)
+        || mouse.just_pressed(MouseButton::Left)
+        || touch_shoot;
 
     if !wants_to_shoot {
         return;
     }
 
-    for trix_transform in trix_query.iter() {
-        commands.spawn((
-            Sprite {
-                color: Color::WHITE,
-                custom_size: Some(Vec2::new(PLAYER_BULLET_WIDTH, PLAYER_BULLET_HEIGHT)),
-                ..default()
-            },
-            Transform::from_xyz(
-                trix_transform.translation.x,
-                trix_transform.translation.y
-                    + TRIX_RENDERED_SIZE / 2.0
-                    + PLAYER_BULLET_HEIGHT / 2.0,
-                2.0,
-            ),
-            PlayerBullet,
-        ));
-        cooldown.0 = PLAYER_SHOOT_COOLDOWN_SECS;
-    }
+    commands.spawn((
+        Sprite {
+            color: Color::WHITE,
+            custom_size: Some(Vec2::new(PLAYER_BULLET_WIDTH, PLAYER_BULLET_HEIGHT)),
+            ..default()
+        },
+        Transform::from_xyz(
+            trix_transform.translation.x,
+            trix_transform.translation.y + TRIX_RENDERED_SIZE / 2.0 + PLAYER_BULLET_HEIGHT / 2.0,
+            2.0,
+        ),
+        PlayerBullet,
+    ));
+    cooldown.0 = PLAYER_SHOOT_COOLDOWN_SECS;
 }
 
 fn move_player_bullets(
@@ -1094,6 +1110,7 @@ fn move_swarm(
 
 fn move_trix(
     keyboard: Res<ButtonInput<KeyCode>>,
+    touches: Res<Touches>,
     mut trix_query: Query<&mut Transform, With<Trix>>,
     speed: Res<Speed>,
     time: Res<Time>,
@@ -1109,6 +1126,19 @@ fn move_trix(
     if keyboard.pressed(KeyCode::ArrowRight) || keyboard.pressed(KeyCode::KeyD) {
         direction += 1.0;
     }
+
+    for touch in touches.iter() {
+        let pos = touch.position();
+        if pos.y > WINDOW_HEIGHT - 40.0 {
+            if pos.x < WINDOW_WIDTH / 3.0 {
+                direction -= 1.0;
+            } else if pos.x > 2.0 * WINDOW_WIDTH / 3.0 {
+                direction += 1.0;
+            }
+        }
+    }
+
+    direction = direction.clamp(-1.0, 1.0);
 
     if direction == 0.0 {
         return;
