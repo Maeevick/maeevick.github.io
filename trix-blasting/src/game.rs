@@ -284,7 +284,7 @@ pub fn pick_special_colors(rng: &mut impl rand::RngExt) -> ([u8; 4], [u8; 4]) {
     (pick_rainbow_color(rng), pick_rainbow_color(rng))
 }
 
-const ALIEN_SHAPES: [[bool; 25]; 3] = [
+const ALIEN_SHAPES: [[bool; 25]; 5] = [
     // crab
     [
         false, true,  false, true,  false,
@@ -308,6 +308,22 @@ const ALIEN_SHAPES: [[bool; 25]; 3] = [
         true,  false, true,  false, true,
         true,  true,  true,  true,  true,
         false, true,  false, true,  false,
+    ],
+    // bat
+    [
+        true,  false, false, false, true,
+        true,  true,  false, true,  true,
+        true,  true,  true,  true,  true,
+        false, false, true,  false, false,
+        false, true,  true,  true,  false,
+    ],
+    // star
+    [
+        true,  false, true,  false, true,
+        false, true,  true,  true,  false,
+        true,  true,  false, true,  true,
+        false, true,  true,  true,  false,
+        true,  false, true,  false, true,
     ],
 ];
 
@@ -518,11 +534,15 @@ fn spawn_alien_wave(
             let alien_color =
                 Color::srgba(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0);
 
-            let is_machinegunner = rng.random::<f32>() < MACHINEGUNNER_PROBABILITY;
-            let is_shielded = rng.random::<f32>() < SHIELDED_PROBABILITY;
-            let is_speedster = rng.random::<f32>() < SPEEDSTER_PROBABILITY;
+            let special_roll = rng.random::<f32>();
+            let is_machinegunner = special_roll < MACHINEGUNNER_PROBABILITY;
+            let is_shielded = !is_machinegunner
+                && special_roll < MACHINEGUNNER_PROBABILITY + SHIELDED_PROBABILITY;
+            let is_speedster = !is_machinegunner
+                && !is_shielded
+                && special_roll < MACHINEGUNNER_PROBABILITY + SHIELDED_PROBABILITY + SPEEDSTER_PROBABILITY;
             let is_special = is_machinegunner || is_shielded || is_speedster;
-            let is_shooter = !is_machinegunner && rng.random::<f32>() < ALIEN_SHOOTER_PROBABILITY;
+            let is_shooter = !is_special && rng.random::<f32>() < ALIEN_SHOOTER_PROBABILITY;
 
             let shape_idx = rng.random_range(0..ALIEN_SHAPES.len());
             let image_handle = if is_special {
