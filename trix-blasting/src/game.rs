@@ -20,9 +20,8 @@ const WALL_MARGIN: f32 = 5.0;
 const SWARM_START_Y: f32 = WINDOW_HEIGHT / 2.0 - 60.0;
 
 const BASE_GAME_SPEED: f32 = 50.0;
-const SPEED_PER_HIT: f32 = 1.0;
-const SPEED_PER_PLAYER_MISS: f32 = 3.0;
-const SPEED_PER_WAVE: f32 = 10.0;
+const SPEED_PER_HIT: f32 = -1.0;
+const SPEED_PER_PLAYER_MISS: f32 = 1.0;
 
 const PLAYER_BULLET_WIDTH: f32 = 4.0;
 const PLAYER_BULLET_HEIGHT: f32 = 12.0;
@@ -92,17 +91,25 @@ struct GameOverText;
 struct ScoreDisplay;
 
 #[derive(Component)]
+struct SpeedDisplay;
+
+#[derive(Resource, Default)]
+struct Score {
+    value: u32,
+}
+
+#[derive(Component)]
 struct WaveDisplay;
 
 #[derive(Component)]
 struct SplashText;
 
 #[derive(Resource)]
-struct GameSpeed {
+struct Speed {
     current: f32,
 }
 
-impl GameSpeed {
+impl Speed {
     fn new() -> Self {
         Self {
             current: BASE_GAME_SPEED,
@@ -114,24 +121,27 @@ impl GameSpeed {
 struct PlayerShootCooldown(f32);
 
 #[derive(Resource)]
-struct SwarmState {
+struct Swarm {
     center_x: f32,
     center_y: f32,
-    horizontal_direction: f32,
+    direction: f32,
 }
 
-impl SwarmState {
+impl Swarm {
     fn new() -> Self {
         Self {
             center_x: 0.0,
             center_y: SWARM_START_Y,
-            horizontal_direction: 1.0,
+            direction: 1.0,
         }
     }
 }
 
 #[derive(Resource)]
-struct WaveNumber(u32);
+struct Wave {
+    number: u32,
+    spawn_count: usize,
+}
 
 #[derive(Resource)]
 struct WaveSplashTimer(Timer);
@@ -141,6 +151,18 @@ type CooldownBarQuery<'w, 's> = Query<
     's,
     (&'static mut Transform, &'static mut Sprite),
     (With<CooldownBar>, Without<Trix>),
+>;
+
+type WaveTransitionEntities<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    Or<(
+        With<PlayerBullet>,
+        With<AlienBullet>,
+        With<GameOverText>,
+        With<Alien>,
+    )>,
 >;
 
 pub fn alien_col_x(col: usize, swarm_center_x: f32) -> f32 {
@@ -155,19 +177,15 @@ pub fn alien_row_y(row: usize, swarm_center_y: f32) -> f32 {
 }
 
 pub fn speed_after_hit(current: f32) -> f32 {
-    current + SPEED_PER_HIT
+    (current + SPEED_PER_HIT).max(BASE_GAME_SPEED)
 }
 
 pub fn speed_after_miss(current: f32) -> f32 {
     current + SPEED_PER_PLAYER_MISS
 }
 
-pub fn speed_after_wave(current: f32) -> f32 {
-    current + SPEED_PER_WAVE
-}
-
-pub fn score_from_speed(current_speed: f32) -> u32 {
-    (current_speed - BASE_GAME_SPEED).max(0.0) as u32
+pub fn speed_after_wave(current: f32, alien_count: usize) -> f32 {
+    current + alien_count as f32
 }
 
 pub fn aabb_overlaps(pos_a: Vec2, half_a: Vec2, pos_b: Vec2, half_b: Vec2) -> bool {
@@ -215,10 +233,14 @@ pub fn create_app(for_wasm: bool) -> App {
         ..default()
     }))
     .insert_resource(ClearColor(Color::linear_rgb(0.05, 0.05, 0.1)))
-    .insert_resource(GameSpeed::new())
-    .insert_resource(SwarmState::new())
+    .insert_resource(Speed::new())
+    .insert_resource(Swarm::new())
     .insert_resource(PlayerShootCooldown(0.0))
-    .insert_resource(WaveNumber(1))
+    .insert_resource(Wave {
+        number: 1,
+        spawn_count: ALIEN_COLS,
+    })
+    .insert_resource(Score::default())
     .insert_resource(WaveSplashTimer(Timer::from_seconds(
         WAVE_SPLASH_DURATION_SECS,
         TimerMode::Once,
@@ -241,6 +263,7 @@ pub fn create_app(for_wasm: bool) -> App {
             check_wave_cleared,
             update_score_display,
             update_wave_display,
+            update_speed_display,
         )
             .run_if(in_state(GameState::Running)),
     )
@@ -251,6 +274,7 @@ pub fn create_app(for_wasm: bool) -> App {
             fade_in_aliens,
             update_score_display,
             update_wave_display,
+            update_speed_display,
         )
             .run_if(in_state(GameState::WaveSplash)),
     )
@@ -264,7 +288,7 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    swarm: Res<SwarmState>,
+    swarm: Res<Swarm>,
 ) {
     commands.spawn(Camera2d);
 
@@ -299,26 +323,35 @@ fn setup(
         CooldownBar,
     ));
 
+    let hud_y = WINDOW_HEIGHT / 2.0 - 22.0;
+    let hud_font = TextFont {
+        font_size: 16.0,
+        ..default()
+    };
+    let hud_color = TextColor(Color::linear_rgb(0.75, 0.75, 0.75));
+
     commands.spawn((
-        Text2d::new("0"),
-        TextFont {
-            font_size: 18.0,
-            ..default()
-        },
-        TextColor(Color::linear_rgb(0.8, 0.8, 0.8)),
-        Transform::from_xyz(100.0, WINDOW_HEIGHT / 2.0 - 25.0, 5.0),
+        Text2d::new("WAVE\n1"),
+        hud_font.clone(),
+        hud_color,
+        Transform::from_xyz(-130.0, hud_y, 5.0),
+        WaveDisplay,
+    ));
+
+    commands.spawn((
+        Text2d::new("SCORE\n0"),
+        hud_font.clone(),
+        hud_color,
+        Transform::from_xyz(0.0, hud_y, 5.0),
         ScoreDisplay,
     ));
 
     commands.spawn((
-        Text2d::new("W1"),
-        TextFont {
-            font_size: 18.0,
-            ..default()
-        },
-        TextColor(Color::linear_rgb(0.8, 0.8, 0.8)),
-        Transform::from_xyz(-150.0, WINDOW_HEIGHT / 2.0 - 25.0, 5.0),
-        WaveDisplay,
+        Text2d::new(format!("SPEED\n{}", BASE_GAME_SPEED as u32)),
+        hud_font,
+        hud_color,
+        Transform::from_xyz(130.0, hud_y, 5.0),
+        SpeedDisplay,
     ));
 
     spawn_alien_wave(&mut commands, &swarm, 1, false);
@@ -326,7 +359,7 @@ fn setup(
     println!("Trix Blasting ready.");
 }
 
-fn spawn_alien_wave(commands: &mut Commands, swarm: &SwarmState, row_count: usize, fade_in: bool) {
+fn spawn_alien_wave(commands: &mut Commands, swarm: &Swarm, row_count: usize, fade_in: bool) {
     let mut rng = rand::rng();
 
     for row in 0..row_count {
@@ -369,45 +402,41 @@ fn spawn_alien_wave(commands: &mut Commands, swarm: &SwarmState, row_count: usiz
 
 fn check_wave_cleared(
     aliens: Query<Entity, With<Alien>>,
-    mut game_speed: ResMut<GameSpeed>,
-    mut wave: ResMut<WaveNumber>,
+    mut speed: ResMut<Speed>,
+    mut wave: ResMut<Wave>,
+    mut score: ResMut<Score>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
     if aliens.is_empty() {
-        game_speed.current = speed_after_wave(game_speed.current);
-        wave.0 += 1;
+        let bonus = wave.spawn_count;
+        speed.current = speed_after_wave(speed.current, bonus);
+        score.value += bonus as u32;
+        wave.number += 1;
         next_state.set(GameState::WaveSplash);
     }
 }
 
 fn on_wave_splash_enter(
     mut commands: Commands,
-    mut swarm: ResMut<SwarmState>,
-    wave: Res<WaveNumber>,
+    mut swarm: ResMut<Swarm>,
+    mut wave: ResMut<Wave>,
     mut splash_timer: ResMut<WaveSplashTimer>,
-    player_bullets: Query<Entity, With<PlayerBullet>>,
-    alien_bullets: Query<Entity, With<AlienBullet>>,
-    game_over_texts: Query<Entity, With<GameOverText>>,
-    existing_aliens: Query<Entity, With<Alien>>,
+    all_ephemeral: WaveTransitionEntities,
 ) {
     splash_timer.0 = Timer::from_seconds(WAVE_SPLASH_DURATION_SECS, TimerMode::Once);
-    *swarm = SwarmState::new();
+    *swarm = Swarm::new();
 
-    let to_despawn: Vec<Entity> = player_bullets
-        .iter()
-        .chain(alien_bullets.iter())
-        .chain(game_over_texts.iter())
-        .chain(existing_aliens.iter())
-        .collect();
+    let to_despawn: Vec<Entity> = all_ephemeral.iter().collect();
     for entity in to_despawn {
         commands.entity(entity).despawn();
     }
 
-    let row_count = rows_for_wave(wave.0);
+    let row_count = rows_for_wave(wave.number);
+    wave.spawn_count = row_count * ALIEN_COLS;
     spawn_alien_wave(&mut commands, &swarm, row_count, true);
 
     commands.spawn((
-        Text2d::new(format!("Wave {}", wave.0)),
+        Text2d::new(format!("Wave {}", wave.number)),
         TextFont {
             font_size: 56.0,
             ..default()
@@ -449,25 +478,30 @@ fn fade_in_aliens(
     }
 }
 
-fn update_score_display(
-    game_speed: Res<GameSpeed>,
-    mut query: Query<&mut Text2d, With<ScoreDisplay>>,
-) {
+fn update_score_display(score: Res<Score>, mut query: Query<&mut Text2d, With<ScoreDisplay>>) {
     for mut text in query.iter_mut() {
-        text.0 = format!("{}", score_from_speed(game_speed.current));
+        text.0 = format!("SCORE\n{}", score.value);
     }
 }
 
-fn update_wave_display(wave: Res<WaveNumber>, mut query: Query<&mut Text2d, With<WaveDisplay>>) {
+fn update_wave_display(wave: Res<Wave>, mut query: Query<&mut Text2d, With<WaveDisplay>>) {
     for mut text in query.iter_mut() {
-        text.0 = format!("W{}", wave.0);
+        text.0 = format!("WAVE\n{}", wave.number);
     }
 }
 
-fn on_game_over_enter(mut commands: Commands, game_speed: Res<GameSpeed>) {
-    let score = score_from_speed(game_speed.current);
+fn update_speed_display(speed: Res<Speed>, mut query: Query<&mut Text2d, With<SpeedDisplay>>) {
+    for mut text in query.iter_mut() {
+        text.0 = format!("SPEED\n{}", speed.current as u32);
+    }
+}
+
+fn on_game_over_enter(mut commands: Commands, score: Res<Score>) {
     commands.spawn((
-        Text2d::new(format!("GAME OVER\nScore: {score}\n\nSPACE to restart")),
+        Text2d::new(format!(
+            "GAME OVER\nScore: {}\n\nENTER to restart",
+            score.value
+        )),
         TextFont {
             font_size: 32.0,
             ..default()
@@ -476,20 +510,23 @@ fn on_game_over_enter(mut commands: Commands, game_speed: Res<GameSpeed>) {
         Transform::from_xyz(0.0, 0.0, 10.0),
         GameOverText,
     ));
-    println!("Game Over! Score: {score}");
+    println!("Game Over! Score: {}", score.value);
 }
 
 fn handle_restart(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut game_speed: ResMut<GameSpeed>,
-    mut wave: ResMut<WaveNumber>,
+    mut speed: ResMut<Speed>,
+    mut wave: ResMut<Wave>,
     mut cooldown: ResMut<PlayerShootCooldown>,
+    mut score: ResMut<Score>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
-    if keyboard.just_pressed(KeyCode::Space) || keyboard.just_pressed(KeyCode::KeyR) {
-        game_speed.current = BASE_GAME_SPEED;
-        wave.0 = 1;
+    if keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::KeyR) {
+        speed.current = BASE_GAME_SPEED;
+        wave.number = 1;
+        wave.spawn_count = ALIEN_COLS;
         cooldown.0 = 0.0;
+        score.value = 0;
         next_state.set(GameState::WaveSplash);
     }
 }
@@ -498,7 +535,8 @@ fn check_bullet_alien_collisions(
     mut commands: Commands,
     bullets: Query<(Entity, &Transform), With<PlayerBullet>>,
     aliens: Query<(Entity, &Transform), With<Alien>>,
-    mut game_speed: ResMut<GameSpeed>,
+    mut speed: ResMut<Speed>,
+    mut score: ResMut<Score>,
 ) {
     let half_bullet = Vec2::new(PLAYER_BULLET_WIDTH / 2.0, PLAYER_BULLET_HEIGHT / 2.0);
     let half_alien = Vec2::splat(ALIEN_RENDERED_SIZE / 2.0);
@@ -531,8 +569,9 @@ fn check_bullet_alien_collisions(
     for entity in hit_bullets.iter().chain(hit_aliens.iter()) {
         commands.entity(*entity).despawn();
     }
+    score.value += hit_count as u32;
     for _ in 0..hit_count {
-        game_speed.current = speed_after_hit(game_speed.current);
+        speed.current = speed_after_hit(speed.current);
     }
 }
 
@@ -579,11 +618,8 @@ fn check_game_over_conditions(
 fn handle_alien_shooting(
     mut commands: Commands,
     time: Res<Time>,
-    game_speed: Res<GameSpeed>,
     mut shooter_query: Query<(&Transform, &Alien, &mut AlienShooter)>,
 ) {
-    let speed_factor = BASE_GAME_SPEED / game_speed.current;
-
     for (transform, alien, mut shooter) in shooter_query.iter_mut() {
         shooter.timer.tick(time.delta());
         if shooter.timer.just_finished() {
@@ -611,10 +647,10 @@ fn handle_alien_shooting(
 fn move_alien_bullets(
     mut commands: Commands,
     mut bullets: Query<(Entity, &mut Transform), With<AlienBullet>>,
-    game_speed: Res<GameSpeed>,
+    speed: Res<Speed>,
     time: Res<Time>,
 ) {
-    let bullet_speed = ALIEN_BULLET_BASE_SPEED + game_speed.current;
+    let bullet_speed = ALIEN_BULLET_BASE_SPEED + speed.current;
 
     for (entity, mut transform) in bullets.iter_mut() {
         transform.translation.y -= bullet_speed * time.delta_secs();
@@ -669,18 +705,18 @@ fn handle_trix_shooting(
 fn move_player_bullets(
     mut commands: Commands,
     mut bullets: Query<(Entity, &mut Transform), With<PlayerBullet>>,
-    mut game_speed: ResMut<GameSpeed>,
+    mut speed: ResMut<Speed>,
     time: Res<Time>,
 ) {
-    let bullet_speed = PLAYER_BULLET_BASE_SPEED + game_speed.current;
+    let bullet_speed = PLAYER_BULLET_BASE_SPEED + speed.current;
 
     for (entity, mut transform) in bullets.iter_mut() {
         transform.translation.y += bullet_speed * time.delta_secs();
 
         if transform.translation.y > WINDOW_HEIGHT / 2.0 + PLAYER_BULLET_HEIGHT {
             commands.entity(entity).despawn();
-            game_speed.current = speed_after_miss(game_speed.current);
-            println!("Miss! Speed: {:.1}", game_speed.current);
+            speed.current = speed_after_miss(speed.current);
+            println!("Miss! Speed: {:.1}", speed.current);
         }
     }
 }
@@ -705,8 +741,8 @@ fn update_cooldown_bar(
 
 fn move_swarm(
     time: Res<Time>,
-    mut swarm: ResMut<SwarmState>,
-    game_speed: Res<GameSpeed>,
+    mut swarm: ResMut<Swarm>,
+    speed: Res<Speed>,
     mut alien_query: Query<(&Alien, &mut Transform)>,
 ) {
     let mut leftmost_col = ALIEN_COLS;
@@ -729,15 +765,15 @@ fn move_swarm(
     let right_wall = WINDOW_WIDTH / 2.0 - WALL_MARGIN;
     let left_wall = -WINDOW_WIDTH / 2.0 + WALL_MARGIN;
 
-    if swarm.horizontal_direction > 0.0 && rightmost_x + half >= right_wall {
-        swarm.horizontal_direction = -1.0;
+    if swarm.direction > 0.0 && rightmost_x + half >= right_wall {
+        swarm.direction = -1.0;
         swarm.center_y -= ALIEN_DROP_DISTANCE;
-    } else if swarm.horizontal_direction < 0.0 && leftmost_x - half <= left_wall {
-        swarm.horizontal_direction = 1.0;
+    } else if swarm.direction < 0.0 && leftmost_x - half <= left_wall {
+        swarm.direction = 1.0;
         swarm.center_y -= ALIEN_DROP_DISTANCE;
     }
 
-    swarm.center_x += swarm.horizontal_direction * game_speed.current * time.delta_secs();
+    swarm.center_x += swarm.direction * speed.current * time.delta_secs();
 
     for (alien, mut transform) in alien_query.iter_mut() {
         transform.translation.x = alien_col_x(alien.col, swarm.center_x);
@@ -748,7 +784,7 @@ fn move_swarm(
 fn move_trix(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut trix_query: Query<&mut Transform, With<Trix>>,
-    game_speed: Res<GameSpeed>,
+    speed: Res<Speed>,
     time: Res<Time>,
 ) {
     let mut direction = 0.0f32;
@@ -767,7 +803,7 @@ fn move_trix(
         return;
     }
 
-    let trix_speed = TRIX_BASE_SPEED + game_speed.current;
+    let trix_speed = TRIX_BASE_SPEED + speed.current;
     let left_boundary = -WINDOW_WIDTH / 2.0 + TRIX_RENDERED_SIZE / 2.0;
     let right_boundary = WINDOW_WIDTH / 2.0 - TRIX_RENDERED_SIZE / 2.0;
 
@@ -825,35 +861,26 @@ mod tests {
     #[test]
     fn given_any_speed_when_player_misses_then_speed_increases_by_fixed_penalty() {
         let result = speed_after_miss(120.0);
-        assert!((result - 125.0).abs() < 0.01);
+        assert!((result - (120.0 + SPEED_PER_PLAYER_MISS)).abs() < 0.01);
     }
 
     #[test]
-    fn given_base_speed_when_bullet_hits_alien_then_speed_increases_by_hit_penalty() {
+    fn given_base_speed_when_bullet_hits_alien_then_speed_stays_at_floor() {
         let result = speed_after_hit(BASE_GAME_SPEED);
-        assert!((result - (BASE_GAME_SPEED + SPEED_PER_HIT)).abs() < 0.01);
+        assert!((result - BASE_GAME_SPEED).abs() < 0.01);
     }
 
     #[test]
-    fn given_any_speed_when_bullet_hits_alien_then_speed_increases_by_fixed_penalty() {
+    fn given_any_speed_when_bullet_hits_alien_then_speed_changes_by_fixed_delta() {
         let result = speed_after_hit(120.0);
-        assert!((result - 121.0).abs() < 0.01);
+        assert!((result - (120.0 + SPEED_PER_HIT)).abs() < 0.01);
     }
 
     #[test]
-    fn given_base_speed_when_wave_clears_then_speed_increases_by_wave_bonus() {
-        let result = speed_after_wave(BASE_GAME_SPEED);
-        assert!((result - (BASE_GAME_SPEED + SPEED_PER_WAVE)).abs() < 0.01);
-    }
-
-    #[test]
-    fn given_base_speed_when_computing_score_then_returns_zero() {
-        assert_eq!(score_from_speed(BASE_GAME_SPEED), 0);
-    }
-
-    #[test]
-    fn given_speed_above_base_when_computing_score_then_returns_difference() {
-        assert_eq!(score_from_speed(BASE_GAME_SPEED + 42.0), 42);
+    fn given_base_speed_when_wave_clears_then_speed_increases_by_alien_count() {
+        let alien_count = 10usize;
+        let result = speed_after_wave(BASE_GAME_SPEED, alien_count);
+        assert!((result - (BASE_GAME_SPEED + alien_count as f32)).abs() < 0.01);
     }
 
     #[test]
