@@ -8,9 +8,9 @@ use bevy::{
 use rand::RngExt;
 
 pub const WINDOW_WIDTH: f32 = 400.0;
-pub const WINDOW_HEIGHT: f32 = 800.0;
+pub const WINDOW_HEIGHT: f32 = 600.0;
 const WINDOW_WIDTH_PX: u32 = 400;
-const WINDOW_HEIGHT_PX: u32 = 800;
+const WINDOW_HEIGHT_PX: u32 = 600;
 
 const TRIX_RENDERED_SIZE: f32 = 30.0;
 const TRIX_COLOR: Color = Color::linear_rgb(0.0, 0.63, 0.87);
@@ -58,7 +58,6 @@ const SPEEDSTER_PROBABILITY: f32 = 0.08;
 const SPEEDSTER_MULTIPLIER_MIN: f32 = 1.2;
 const SPEEDSTER_MULTIPLIER_MAX: f32 = 2.0;
 const SPEEDSTER_ACTIVATION_THRESHOLD: usize = 5;
-
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GameState {
@@ -186,7 +185,9 @@ struct SpeedsterBoost {
 }
 
 impl SpeedsterBoost {
-    fn new() -> Self { Self { multiplier: 1.0 } }
+    fn new() -> Self {
+        Self { multiplier: 1.0 }
+    }
 }
 
 type CooldownBarQuery<'w, 's> = Query<
@@ -288,51 +289,46 @@ pub fn pick_complementary_pair(rng: &mut impl rand::RngExt) -> ([u8; 4], [u8; 4]
     let [r1, g1, b1] = hue_to_rgb(hue);
     let [r2, g2, b2] = hue_to_rgb((hue + 180.0).rem_euclid(360.0));
     (
-        [(r1 * brightness * 255.0) as u8, (g1 * brightness * 255.0) as u8, (b1 * brightness * 255.0) as u8, 255],
-        [(r2 * brightness * 255.0) as u8, (g2 * brightness * 255.0) as u8, (b2 * brightness * 255.0) as u8, 255],
+        [
+            (r1 * brightness * 255.0) as u8,
+            (g1 * brightness * 255.0) as u8,
+            (b1 * brightness * 255.0) as u8,
+            255,
+        ],
+        [
+            (r2 * brightness * 255.0) as u8,
+            (g2 * brightness * 255.0) as u8,
+            (b2 * brightness * 255.0) as u8,
+            255,
+        ],
     )
 }
 
 const ALIEN_SHAPES: [[bool; 25]; 5] = [
     // crab
     [
-        false, true,  false, true,  false,
-        true,  true,  true,  true,  true,
-        true,  true,  false, true,  true,
-        false, true,  true,  true,  false,
-        true,  false, false, false, true,
+        false, true, false, true, false, true, true, true, true, true, true, true, false, true,
+        true, false, true, true, true, false, true, false, false, false, true,
     ],
     // squid
     [
-        false, false, true,  false, false,
-        false, true,  true,  true,  false,
-        true,  true,  false, true,  true,
-        true,  false, true,  false, true,
-        false, true,  false, true,  false,
+        false, false, true, false, false, false, true, true, true, false, true, true, false, true,
+        true, true, false, true, false, true, false, true, false, true, false,
     ],
     // octopus
     [
-        false, true,  true,  true,  false,
-        true,  true,  true,  true,  true,
-        true,  false, true,  false, true,
-        true,  true,  true,  true,  true,
-        false, true,  false, true,  false,
+        false, true, true, true, false, true, true, true, true, true, true, false, true, false,
+        true, true, true, true, true, true, false, true, false, true, false,
     ],
     // bat
     [
-        true,  false, false, false, true,
-        true,  true,  false, true,  true,
-        true,  true,  true,  true,  true,
-        false, false, true,  false, false,
-        false, true,  true,  true,  false,
+        true, false, false, false, true, true, true, false, true, true, true, true, true, true,
+        true, false, false, true, false, false, false, true, true, true, false,
     ],
     // star
     [
-        true,  false, true,  false, true,
-        false, true,  true,  true,  false,
-        true,  true,  false, true,  true,
-        false, true,  true,  true,  false,
-        true,  false, true,  false, true,
+        true, false, true, false, true, false, true, true, true, false, true, true, false, true,
+        true, false, true, true, true, false, true, false, true, false, true,
     ],
 ];
 
@@ -369,7 +365,11 @@ pub fn special_alien_pixel_data(color_a: [u8; 4], color_b: [u8; 4], shape: &[boo
 
 fn make_alien_image(images: &mut Assets<Image>, pixel_data: Vec<u8>) -> Handle<Image> {
     let mut image = Image::new(
-        Extent3d { width: 5, height: 5, depth_or_array_layers: 1 },
+        Extent3d {
+            width: 5,
+            height: 5,
+            depth_or_array_layers: 1,
+        },
         TextureDimension::D2,
         pixel_data,
         TextureFormat::Rgba8UnormSrgb,
@@ -557,7 +557,8 @@ fn spawn_alien_wave(
                 && special_roll < MACHINEGUNNER_PROBABILITY + SHIELDED_PROBABILITY;
             let is_speedster = !is_machinegunner
                 && !is_shielded
-                && special_roll < MACHINEGUNNER_PROBABILITY + SHIELDED_PROBABILITY + SPEEDSTER_PROBABILITY;
+                && special_roll
+                    < MACHINEGUNNER_PROBABILITY + SHIELDED_PROBABILITY + SPEEDSTER_PROBABILITY;
             let is_special = is_machinegunner || is_shielded || is_speedster;
             let is_shooter = !is_special && rng.random::<f32>() < ALIEN_SHOOTER_PROBABILITY;
 
@@ -565,19 +566,44 @@ fn spawn_alien_wave(
             let mut speedster_base_color: Option<Color> = None;
             let image_handle = if is_machinegunner {
                 let (ca, cb) = pick_complementary_pair(&mut rng);
-                make_alien_image(images, special_alien_pixel_data(ca, cb, &ALIEN_SHAPES[shape_idx]))
+                make_alien_image(
+                    images,
+                    special_alien_pixel_data(ca, cb, &ALIEN_SHAPES[shape_idx]),
+                )
             } else if is_speedster {
                 let sp_color = pick_rainbow_color(&mut rng);
                 let [r, g, b, _] = sp_color;
-                speedster_base_color = Some(Color::srgba(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0));
-                make_alien_image(images, alien_pixel_data([255, 255, 255, 255], &ALIEN_SHAPES[shape_idx]))
+                speedster_base_color = Some(Color::srgba(
+                    r as f32 / 255.0,
+                    g as f32 / 255.0,
+                    b as f32 / 255.0,
+                    1.0,
+                ));
+                make_alien_image(
+                    images,
+                    alien_pixel_data([255, 255, 255, 255], &ALIEN_SHAPES[shape_idx]),
+                )
             } else if is_shielded {
-                make_alien_image(images, alien_pixel_data_bg(color_bytes, [255, 255, 255, 180], &ALIEN_SHAPES[shape_idx]))
+                make_alien_image(
+                    images,
+                    alien_pixel_data_bg(
+                        color_bytes,
+                        [255, 255, 255, 180],
+                        &ALIEN_SHAPES[shape_idx],
+                    ),
+                )
             } else {
-                make_alien_image(images, alien_pixel_data(color_bytes, &ALIEN_SHAPES[shape_idx]))
+                make_alien_image(
+                    images,
+                    alien_pixel_data(color_bytes, &ALIEN_SHAPES[shape_idx]),
+                )
             };
 
-            let tint = if fade_in { Color::WHITE.with_alpha(0.0) } else { Color::WHITE };
+            let tint = if fade_in {
+                Color::WHITE.with_alpha(0.0)
+            } else {
+                Color::WHITE
+            };
 
             let mut entity = commands.spawn((
                 Sprite {
@@ -587,7 +613,11 @@ fn spawn_alien_wave(
                     ..default()
                 },
                 Transform::from_xyz(x, y, 1.0),
-                Alien { col, row, color: alien_color },
+                Alien {
+                    col,
+                    row,
+                    color: alien_color,
+                },
             ));
 
             if fade_in {
@@ -598,7 +628,8 @@ fn spawn_alien_wave(
             if is_machinegunner {
                 let idle_interval =
                     rng.random_range(MACHINEGUNNER_IDLE_MIN..MACHINEGUNNER_IDLE_MAX);
-                let burst_count = rng.random_range(MACHINEGUNNER_BURST_MIN..=MACHINEGUNNER_BURST_MAX);
+                let burst_count =
+                    rng.random_range(MACHINEGUNNER_BURST_MIN..=MACHINEGUNNER_BURST_MAX);
                 entity.insert(Machinegunner {
                     burst_count,
                     remaining: 0,
@@ -950,7 +981,11 @@ fn handle_speedster_flash(
     for (mut sprite, mut speedster) in query.iter_mut() {
         speedster.flash_elapsed += time.delta_secs();
         let flash_on = ((speedster.flash_elapsed * 8.0) as u32).is_multiple_of(2);
-        sprite.color = if flash_on { speedster.base_color } else { Color::WHITE };
+        sprite.color = if flash_on {
+            speedster.base_color
+        } else {
+            Color::WHITE
+        };
     }
 }
 
