@@ -44,6 +44,21 @@ const ALIEN_SHOOTER_PROBABILITY: f32 = 0.3;
 const WAVE_SPLASH_DURATION_SECS: f32 = 1.5;
 const ALIEN_FADE_DURATION_SECS: f32 = 0.3;
 
+const MACHINEGUNNER_PROBABILITY: f32 = 0.12;
+const MACHINEGUNNER_BURST_MIN: u8 = 3;
+const MACHINEGUNNER_BURST_MAX: u8 = 8;
+const MACHINEGUNNER_IDLE_MIN: f32 = 2.0;
+const MACHINEGUNNER_IDLE_MAX: f32 = 5.0;
+
+const SHIELDED_PROBABILITY: f32 = 0.10;
+const SHIELDED_HEALTH_MIN: u8 = 3;
+const SHIELDED_HEALTH_MAX: u8 = 8;
+
+const SPEEDSTER_PROBABILITY: f32 = 0.08;
+const SPEEDSTER_MULTIPLIER_MIN: f32 = 1.2;
+const SPEEDSTER_MULTIPLIER_MAX: f32 = 2.0;
+const SPEEDSTER_ACTIVATION_THRESHOLD: usize = 5;
+
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GameState {
@@ -144,6 +159,34 @@ struct Wave {
 #[derive(Resource)]
 struct WaveSplashTimer(Timer);
 
+#[derive(Component)]
+struct Machinegunner {
+    burst_count: u8,
+    remaining: u8,
+    burst_elapsed: f32,
+    idle_elapsed: f32,
+    idle_interval: f32,
+}
+
+#[derive(Component)]
+struct Shielded {
+    health: u8,
+}
+
+#[derive(Component)]
+struct Speedster {
+    multiplier: f32,
+}
+
+#[derive(Resource)]
+struct SpeedsterBoost {
+    multiplier: f32,
+}
+
+impl SpeedsterBoost {
+    fn new() -> Self { Self { multiplier: 1.0 } }
+}
+
 type CooldownBarQuery<'w, 's> = Query<
     'w,
     's,
@@ -184,6 +227,10 @@ pub fn speed_after_miss(current: f32) -> f32 {
 
 pub fn speed_after_wave(current: f32, alien_count: usize) -> f32 {
     current + alien_count as f32
+}
+
+pub fn burst_delay_secs(current_speed: f32) -> f32 {
+    0.1 * (BASE_GAME_SPEED / current_speed)
 }
 
 pub fn aabb_overlaps(pos_a: Vec2, half_a: Vec2, pos_b: Vec2, half_b: Vec2) -> bool {
@@ -271,13 +318,17 @@ pub fn alien_pixel_data(color: [u8; 4], shape: &[bool; 25]) -> Vec<u8> {
         .collect()
 }
 
-pub fn special_alien_pixel_data(color_a: [u8; 4], color_b: [u8; 4]) -> Vec<u8> {
+pub fn special_alien_pixel_data(color_a: [u8; 4], color_b: [u8; 4], shape: &[bool; 25]) -> Vec<u8> {
     let mut data = Vec::with_capacity(100);
     for row in 0..5usize {
         for col in 0..5usize {
             let t = ((row + col) as f32 / 8.0).clamp(0.0, 1.0);
-            for ch in 0..4 {
-                data.push((color_a[ch] as f32 * (1.0 - t) + color_b[ch] as f32 * t) as u8);
+            if shape[row * 5 + col] {
+                for ch in 0..4 {
+                    data.push((color_a[ch] as f32 * (1.0 - t) + color_b[ch] as f32 * t) as u8);
+                }
+            } else {
+                data.extend_from_slice(&[0, 0, 0, 0]);
             }
         }
     }
@@ -327,6 +378,7 @@ pub fn create_app(for_wasm: bool) -> App {
         spawn_count: ALIEN_COLS,
     })
     .insert_resource(Score::default())
+    .insert_resource(SpeedsterBoost::new())
     .insert_resource(WaveSplashTimer(Timer::from_seconds(
         WAVE_SPLASH_DURATION_SECS,
         TimerMode::Once,
@@ -342,6 +394,8 @@ pub fn create_app(for_wasm: bool) -> App {
             update_cooldown_bar,
             move_swarm,
             handle_alien_shooting,
+            handle_machinegunner_shooting,
+            handle_speedsters,
             move_alien_bullets,
             fade_in_aliens,
             check_bullet_alien_collisions,
@@ -463,11 +517,22 @@ fn spawn_alien_wave(
             let [r, g, b, _] = color_bytes;
             let alien_color =
                 Color::srgba(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0);
-            let is_shooter = rng.random::<f32>() < ALIEN_SHOOTER_PROBABILITY;
-            let tint = if fade_in { Color::WHITE.with_alpha(0.0) } else { Color::WHITE };
+
+            let is_machinegunner = rng.random::<f32>() < MACHINEGUNNER_PROBABILITY;
+            let is_shielded = rng.random::<f32>() < SHIELDED_PROBABILITY;
+            let is_speedster = rng.random::<f32>() < SPEEDSTER_PROBABILITY;
+            let is_special = is_machinegunner || is_shielded || is_speedster;
+            let is_shooter = !is_machinegunner && rng.random::<f32>() < ALIEN_SHOOTER_PROBABILITY;
+
             let shape_idx = rng.random_range(0..ALIEN_SHAPES.len());
-            let image_handle =
-                make_alien_image(images, alien_pixel_data(color_bytes, &ALIEN_SHAPES[shape_idx]));
+            let image_handle = if is_special {
+                let (ca, cb) = pick_special_colors(&mut rng);
+                make_alien_image(images, special_alien_pixel_data(ca, cb, &ALIEN_SHAPES[shape_idx]))
+            } else {
+                make_alien_image(images, alien_pixel_data(color_bytes, &ALIEN_SHAPES[shape_idx]))
+            };
+
+            let tint = if fade_in { Color::WHITE.with_alpha(0.0) } else { Color::WHITE };
 
             let mut entity = commands.spawn((
                 Sprite {
@@ -485,7 +550,27 @@ fn spawn_alien_wave(
                     timer: Timer::from_seconds(ALIEN_FADE_DURATION_SECS, TimerMode::Once),
                 });
             }
-
+            if is_machinegunner {
+                let idle_interval =
+                    rng.random_range(MACHINEGUNNER_IDLE_MIN..MACHINEGUNNER_IDLE_MAX);
+                let burst_count = rng.random_range(MACHINEGUNNER_BURST_MIN..=MACHINEGUNNER_BURST_MAX);
+                entity.insert(Machinegunner {
+                    burst_count,
+                    remaining: 0,
+                    burst_elapsed: 0.0,
+                    idle_elapsed: 0.0,
+                    idle_interval,
+                });
+            }
+            if is_shielded {
+                let health = rng.random_range(SHIELDED_HEALTH_MIN..=SHIELDED_HEALTH_MAX);
+                entity.insert(Shielded { health });
+            }
+            if is_speedster {
+                let multiplier =
+                    rng.random_range(SPEEDSTER_MULTIPLIER_MIN..=SPEEDSTER_MULTIPLIER_MAX);
+                entity.insert(Speedster { multiplier });
+            }
             if is_shooter {
                 let interval = rng.random_range(ALIEN_SHOOT_INTERVAL_MIN..ALIEN_SHOOT_INTERVAL_MAX);
                 entity.insert(AlienShooter {
@@ -616,6 +701,7 @@ fn handle_restart(
     mut wave: ResMut<Wave>,
     mut cooldown: ResMut<PlayerShootCooldown>,
     mut score: ResMut<Score>,
+    mut boost: ResMut<SpeedsterBoost>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
     if keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::KeyR) {
@@ -624,6 +710,7 @@ fn handle_restart(
         wave.spawn_count = ALIEN_COLS;
         cooldown.0 = 0.0;
         score.value = 0;
+        boost.multiplier = 1.0;
         next_state.set(GameState::WaveSplash);
     }
 }
@@ -632,21 +719,23 @@ fn check_bullet_alien_collisions(
     mut commands: Commands,
     bullets: Query<(Entity, &Transform), With<PlayerBullet>>,
     aliens: Query<(Entity, &Transform), With<Alien>>,
+    mut shielded: Query<&mut Shielded>,
     mut speed: ResMut<Speed>,
     mut score: ResMut<Score>,
 ) {
     let half_bullet = Vec2::new(PLAYER_BULLET_WIDTH / 2.0, PLAYER_BULLET_HEIGHT / 2.0);
     let half_alien = Vec2::splat(ALIEN_RENDERED_SIZE / 2.0);
 
-    let mut hit_bullets = std::collections::HashSet::new();
-    let mut hit_aliens = std::collections::HashSet::new();
+    let mut used_bullets = std::collections::HashSet::new();
+    let mut used_aliens = std::collections::HashSet::new();
+    let mut hit_pairs: Vec<(Entity, Entity)> = Vec::new();
 
     for (bullet_entity, bullet_transform) in bullets.iter() {
-        if hit_bullets.contains(&bullet_entity) {
+        if used_bullets.contains(&bullet_entity) {
             continue;
         }
         for (alien_entity, alien_transform) in aliens.iter() {
-            if hit_aliens.contains(&alien_entity) {
+            if used_aliens.contains(&alien_entity) {
                 continue;
             }
             if aabb_overlaps(
@@ -655,20 +744,27 @@ fn check_bullet_alien_collisions(
                 alien_transform.translation.truncate(),
                 half_alien,
             ) {
-                hit_bullets.insert(bullet_entity);
-                hit_aliens.insert(alien_entity);
+                used_bullets.insert(bullet_entity);
+                used_aliens.insert(alien_entity);
+                hit_pairs.push((bullet_entity, alien_entity));
                 break;
             }
         }
     }
 
-    let hit_count = hit_aliens.len();
-    for entity in hit_bullets.iter().chain(hit_aliens.iter()) {
-        commands.entity(*entity).despawn();
-    }
-    score.value += hit_count as u32;
-    for _ in 0..hit_count {
+    for (bullet_entity, alien_entity) in &hit_pairs {
+        commands.entity(*bullet_entity).despawn();
+        score.value += 1;
         speed.current = speed_after_hit(speed.current);
+        if let Ok(mut s) = shielded.get_mut(*alien_entity) {
+            if s.health > 1 {
+                s.health -= 1;
+            } else {
+                commands.entity(*alien_entity).despawn();
+            }
+        } else {
+            commands.entity(*alien_entity).despawn();
+        }
     }
 }
 
@@ -738,6 +834,63 @@ fn handle_alien_shooting(
                 .timer
                 .set_duration(std::time::Duration::from_secs_f32(new_interval.max(0.2)));
         }
+    }
+}
+
+fn handle_machinegunner_shooting(
+    mut commands: Commands,
+    time: Res<Time>,
+    speed: Res<Speed>,
+    mut query: Query<(&Transform, &Alien, &mut Machinegunner)>,
+) {
+    let burst_delay = burst_delay_secs(speed.current);
+    let dt = time.delta_secs();
+
+    for (transform, alien, mut gunner) in query.iter_mut() {
+        if gunner.remaining > 0 {
+            gunner.burst_elapsed += dt;
+            while gunner.burst_elapsed >= burst_delay && gunner.remaining > 0 {
+                gunner.burst_elapsed -= burst_delay;
+                gunner.remaining -= 1;
+                commands.spawn((
+                    Sprite {
+                        color: alien.color,
+                        custom_size: Some(Vec2::new(ALIEN_BULLET_WIDTH, ALIEN_BULLET_HEIGHT)),
+                        ..default()
+                    },
+                    Transform::from_xyz(
+                        transform.translation.x,
+                        transform.translation.y
+                            - ALIEN_RENDERED_SIZE / 2.0
+                            - ALIEN_BULLET_HEIGHT / 2.0,
+                        2.0,
+                    ),
+                    AlienBullet,
+                ));
+            }
+        } else {
+            gunner.idle_elapsed += dt;
+            if gunner.idle_elapsed >= gunner.idle_interval {
+                gunner.idle_elapsed = 0.0;
+                gunner.burst_elapsed = 0.0;
+                gunner.remaining = gunner.burst_count;
+            }
+        }
+    }
+}
+
+fn handle_speedsters(
+    aliens: Query<Entity, With<Alien>>,
+    speedsters: Query<&Speedster>,
+    mut boost: ResMut<SpeedsterBoost>,
+) {
+    if aliens.iter().count() <= SPEEDSTER_ACTIVATION_THRESHOLD && !speedsters.is_empty() {
+        boost.multiplier = speedsters
+            .iter()
+            .map(|s| s.multiplier)
+            .fold(1.0f32, f32::max);
+    } else {
+        boost.multiplier = 1.0;
     }
 }
 
@@ -840,6 +993,7 @@ fn move_swarm(
     time: Res<Time>,
     mut swarm: ResMut<Swarm>,
     speed: Res<Speed>,
+    boost: Res<SpeedsterBoost>,
     mut alien_query: Query<(&Alien, &mut Transform)>,
 ) {
     let mut leftmost_col = ALIEN_COLS;
@@ -870,7 +1024,7 @@ fn move_swarm(
         swarm.center_y -= ALIEN_DROP_DISTANCE;
     }
 
-    swarm.center_x += swarm.direction * speed.current * time.delta_secs();
+    swarm.center_x += swarm.direction * speed.current * boost.multiplier * time.delta_secs();
 
     for (alien, mut transform) in alien_query.iter_mut() {
         transform.translation.x = alien_col_x(alien.col, swarm.center_x);
@@ -1051,9 +1205,21 @@ mod tests {
     fn given_two_colors_when_creating_special_pixel_data_then_corners_match() {
         let black = [0u8, 0, 0, 255];
         let white = [255u8, 255, 255, 255];
-        let data = special_alien_pixel_data(black, white);
+        let data = special_alien_pixel_data(black, white, &[true; 25]);
         assert_eq!(data.len(), 100);
         assert_eq!(&data[0..4], &black);
         assert_eq!(&data[96..100], &white);
+    }
+
+    #[test]
+    fn given_base_speed_when_computing_burst_delay_then_equals_0_1() {
+        let delay = burst_delay_secs(BASE_GAME_SPEED);
+        assert!((delay - 0.1).abs() < 0.001);
+    }
+
+    #[test]
+    fn given_double_speed_when_computing_burst_delay_then_delay_halves() {
+        let delay = burst_delay_secs(BASE_GAME_SPEED * 2.0);
+        assert!((delay - 0.05).abs() < 0.001);
     }
 }
