@@ -176,6 +176,8 @@ struct Shielded {
 #[derive(Component)]
 struct Speedster {
     multiplier: f32,
+    base_color: Color,
+    flash_elapsed: f32,
 }
 
 #[derive(Resource)]
@@ -280,8 +282,15 @@ pub fn pick_rainbow_color(rng: &mut impl rand::RngExt) -> [u8; 4] {
     ]
 }
 
-pub fn pick_special_colors(rng: &mut impl rand::RngExt) -> ([u8; 4], [u8; 4]) {
-    (pick_rainbow_color(rng), pick_rainbow_color(rng))
+pub fn pick_complementary_pair(rng: &mut impl rand::RngExt) -> ([u8; 4], [u8; 4]) {
+    let hue: f32 = rng.random_range(0.0..360.0);
+    let brightness: f32 = rng.random_range(0.7..1.0);
+    let [r1, g1, b1] = hue_to_rgb(hue);
+    let [r2, g2, b2] = hue_to_rgb((hue + 180.0).rem_euclid(360.0));
+    (
+        [(r1 * brightness * 255.0) as u8, (g1 * brightness * 255.0) as u8, (b1 * brightness * 255.0) as u8, 255],
+        [(r2 * brightness * 255.0) as u8, (g2 * brightness * 255.0) as u8, (b2 * brightness * 255.0) as u8, 255],
+    )
 }
 
 const ALIEN_SHAPES: [[bool; 25]; 5] = [
@@ -331,6 +340,13 @@ pub fn alien_pixel_data(color: [u8; 4], shape: &[bool; 25]) -> Vec<u8> {
     shape
         .iter()
         .flat_map(|&filled| if filled { color } else { [0, 0, 0, 0] })
+        .collect()
+}
+
+pub fn alien_pixel_data_bg(color: [u8; 4], bg: [u8; 4], shape: &[bool; 25]) -> Vec<u8> {
+    shape
+        .iter()
+        .flat_map(|&filled| if filled { color } else { bg })
         .collect()
 }
 
@@ -412,6 +428,7 @@ pub fn create_app(for_wasm: bool) -> App {
             handle_alien_shooting,
             handle_machinegunner_shooting,
             handle_speedsters,
+            handle_speedster_flash,
             move_alien_bullets,
             fade_in_aliens,
             check_bullet_alien_collisions,
@@ -545,9 +562,17 @@ fn spawn_alien_wave(
             let is_shooter = !is_special && rng.random::<f32>() < ALIEN_SHOOTER_PROBABILITY;
 
             let shape_idx = rng.random_range(0..ALIEN_SHAPES.len());
-            let image_handle = if is_special {
-                let (ca, cb) = pick_special_colors(&mut rng);
+            let mut speedster_base_color: Option<Color> = None;
+            let image_handle = if is_machinegunner {
+                let (ca, cb) = pick_complementary_pair(&mut rng);
                 make_alien_image(images, special_alien_pixel_data(ca, cb, &ALIEN_SHAPES[shape_idx]))
+            } else if is_speedster {
+                let sp_color = pick_rainbow_color(&mut rng);
+                let [r, g, b, _] = sp_color;
+                speedster_base_color = Some(Color::srgba(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0));
+                make_alien_image(images, alien_pixel_data([255, 255, 255, 255], &ALIEN_SHAPES[shape_idx]))
+            } else if is_shielded {
+                make_alien_image(images, alien_pixel_data_bg(color_bytes, [255, 255, 255, 180], &ALIEN_SHAPES[shape_idx]))
             } else {
                 make_alien_image(images, alien_pixel_data(color_bytes, &ALIEN_SHAPES[shape_idx]))
             };
@@ -589,7 +614,11 @@ fn spawn_alien_wave(
             if is_speedster {
                 let multiplier =
                     rng.random_range(SPEEDSTER_MULTIPLIER_MIN..=SPEEDSTER_MULTIPLIER_MAX);
-                entity.insert(Speedster { multiplier });
+                entity.insert(Speedster {
+                    multiplier,
+                    base_color: speedster_base_color.unwrap_or(Color::WHITE),
+                    flash_elapsed: 0.0,
+                });
             }
             if is_shooter {
                 let interval = rng.random_range(ALIEN_SHOOT_INTERVAL_MIN..ALIEN_SHOOT_INTERVAL_MAX);
@@ -911,6 +940,17 @@ fn handle_speedsters(
             .fold(1.0f32, f32::max);
     } else {
         boost.multiplier = 1.0;
+    }
+}
+
+fn handle_speedster_flash(
+    time: Res<Time>,
+    mut query: Query<(&mut Sprite, &mut Speedster), Without<AlphaFadeIn>>,
+) {
+    for (mut sprite, mut speedster) in query.iter_mut() {
+        speedster.flash_elapsed += time.delta_secs();
+        let flash_on = ((speedster.flash_elapsed * 8.0) as u32).is_multiple_of(2);
+        sprite.color = if flash_on { speedster.base_color } else { Color::WHITE };
     }
 }
 
