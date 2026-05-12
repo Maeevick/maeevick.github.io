@@ -93,6 +93,11 @@ struct AlphaFadeIn {
 struct AlienBullet;
 
 #[derive(Component)]
+struct BulletSplash {
+    timer: Timer,
+}
+
+#[derive(Component)]
 struct PlayerBullet;
 
 #[derive(Component)]
@@ -456,6 +461,7 @@ pub fn create_app(for_wasm: bool) -> App {
             handle_speedsters,
             handle_speedster_flash,
             move_alien_bullets,
+            animate_bullet_splash,
             fade_in_aliens,
             check_bullet_alien_collisions,
             check_game_over_conditions,
@@ -1078,16 +1084,52 @@ fn handle_speedster_flash(
 
 fn move_alien_bullets(
     mut commands: Commands,
-    mut bullets: Query<(Entity, &mut Transform), With<AlienBullet>>,
+    mut bullets: Query<(Entity, &mut Transform, &Sprite), With<AlienBullet>>,
     speed: Res<Speed>,
     time: Res<Time>,
 ) {
     let bullet_speed = ALIEN_BULLET_BASE_SPEED + speed.current;
 
-    for (entity, mut transform) in bullets.iter_mut() {
+    for (entity, mut transform, sprite) in bullets.iter_mut() {
         transform.translation.y -= bullet_speed * time.delta_secs();
 
-        if transform.translation.y < -WINDOW_HEIGHT / 2.0 - ALIEN_BULLET_HEIGHT {
+        if transform.translation.y <= BASELINE_Y {
+            transform.translation.y = BASELINE_Y;
+            let color = sprite.color;
+            commands
+                .entity(entity)
+                .remove::<AlienBullet>()
+                .insert(BulletSplash {
+                    timer: Timer::from_seconds(0.25, TimerMode::Once),
+                })
+                .insert(Sprite {
+                    color,
+                    custom_size: Some(Vec2::new(ALIEN_BULLET_WIDTH, ALIEN_BULLET_HEIGHT)),
+                    ..default()
+                });
+        }
+    }
+}
+
+fn animate_bullet_splash(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut splashes: Query<(Entity, &mut BulletSplash, &mut Sprite)>,
+) {
+    for (entity, mut splash, mut sprite) in splashes.iter_mut() {
+        splash.timer.tick(time.delta());
+        let t = splash.timer.fraction();
+
+        let size = Vec2::new(
+            ALIEN_BULLET_WIDTH + t * 14.0,
+            ALIEN_BULLET_HEIGHT * (1.0 - t * 0.5),
+        );
+        sprite.custom_size = Some(size);
+
+        let alpha = 1.0 - t;
+        sprite.color = sprite.color.with_alpha(alpha);
+
+        if splash.timer.just_finished() {
             commands.entity(entity).despawn();
         }
     }
