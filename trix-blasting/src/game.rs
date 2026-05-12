@@ -59,6 +59,9 @@ const SPEEDSTER_MULTIPLIER_MIN: f32 = 1.2;
 const SPEEDSTER_MULTIPLIER_MAX: f32 = 2.0;
 const SPEEDSTER_ACTIVATION_THRESHOLD: usize = 5;
 
+const RESTART_BUTTON_COLOR: Color = Color::linear_rgb(0.0, 0.63, 0.87);
+const RESTART_BUTTON_HOVER: Color = Color::linear_rgb(0.10, 0.76, 1.0);
+
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GameState {
     #[default]
@@ -100,6 +103,9 @@ struct CooldownBar;
 struct GameOverText;
 
 #[derive(Component)]
+struct RestartButton;
+
+#[derive(Component)]
 struct ScoreDisplay;
 
 #[derive(Component)]
@@ -109,6 +115,9 @@ struct SpeedDisplay;
 struct Score {
     value: u32,
 }
+
+#[derive(Resource, Default)]
+struct RestartPending(bool);
 
 #[derive(Component)]
 struct WaveDisplay;
@@ -411,6 +420,7 @@ pub fn create_app(for_wasm: bool) -> App {
     })
     .insert_resource(Score::default())
     .insert_resource(SpeedsterBoost::new())
+    .insert_resource(RestartPending::default())
     .insert_resource(WaveSplashTimer(Timer::from_seconds(
         WAVE_SPLASH_DURATION_SECS,
         TimerMode::Once,
@@ -451,7 +461,11 @@ pub fn create_app(for_wasm: bool) -> App {
         )
             .run_if(in_state(GameState::WaveSplash)),
     )
-    .add_systems(Update, handle_restart.run_if(in_state(GameState::GameOver)))
+    .add_systems(
+        Update,
+        (detect_restart, apply_restart, restart_button_feedback)
+            .run_if(in_state(GameState::GameOver)),
+    )
     .add_systems(OnEnter(GameState::WaveSplash), on_wave_splash_enter)
     .add_systems(OnEnter(GameState::GameOver), on_game_over_enter);
     app
@@ -759,24 +773,67 @@ fn update_speed_display(speed: Res<Speed>, mut query: Query<&mut Text2d, With<Sp
 }
 
 fn on_game_over_enter(mut commands: Commands, score: Res<Score>) {
-    commands.spawn((
-        Text2d::new(format!(
-            "GAME OVER\nScore: {}\n\nENTER to restart",
-            score.value
-        )),
-        TextFont {
-            font_size: 32.0,
-            ..default()
-        },
-        TextColor(Color::WHITE),
-        Transform::from_xyz(0.0, 0.0, 10.0),
-        GameOverText,
-    ));
+    commands
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                position_type: PositionType::Absolute,
+                ..default()
+            },
+            BackgroundColor(Color::NONE),
+            GameOverText,
+        ))
+        .with_children(|parent| {
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(280.0),
+                        height: Val::Px(120.0),
+                        border: UiRect::all(Val::Px(3.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        border_radius: BorderRadius::all(Val::Px(8.0)),
+                        ..default()
+                    },
+                    BorderColor::all(Color::WHITE),
+                    BackgroundColor(RESTART_BUTTON_COLOR),
+                    RestartButton,
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new(format!("GAME OVER\nScore: {}\n\nRESTART", score.value)),
+                        TextFont {
+                            font_size: 20.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                        TextLayout::new_with_justify(Justify::Center),
+                    ));
+                });
+        });
     println!("Game Over! Score: {}", score.value);
 }
 
-fn handle_restart(
+fn detect_restart(
     keyboard: Res<ButtonInput<KeyCode>>,
+    restart_btn: Query<&Interaction, (Changed<Interaction>, With<RestartButton>)>,
+    mut pending: ResMut<RestartPending>,
+) {
+    let button_pressed = restart_btn.iter().any(|i| *i == Interaction::Pressed);
+    if button_pressed
+        || keyboard.just_pressed(KeyCode::Enter)
+        || keyboard.just_pressed(KeyCode::KeyR)
+    {
+        pending.0 = true;
+    }
+}
+
+fn apply_restart(
+    mut pending: ResMut<RestartPending>,
     mut speed: ResMut<Speed>,
     mut wave: ResMut<Wave>,
     mut cooldown: ResMut<PlayerShootCooldown>,
@@ -784,14 +841,27 @@ fn handle_restart(
     mut boost: ResMut<SpeedsterBoost>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
-    if keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::KeyR) {
-        speed.current = BASE_GAME_SPEED;
-        wave.number = 1;
-        wave.spawn_count = ALIEN_COLS;
-        cooldown.0 = 0.0;
-        score.value = 0;
-        boost.multiplier = 1.0;
-        next_state.set(GameState::WaveSplash);
+    if !pending.0 {
+        return;
+    }
+    pending.0 = false;
+    speed.current = BASE_GAME_SPEED;
+    wave.number = 1;
+    wave.spawn_count = ALIEN_COLS;
+    cooldown.0 = 0.0;
+    score.value = 0;
+    boost.multiplier = 1.0;
+    next_state.set(GameState::WaveSplash);
+}
+
+fn restart_button_feedback(
+    mut buttons: Query<(&Interaction, &mut BackgroundColor), With<RestartButton>>,
+) {
+    for (interaction, mut color) in &mut buttons {
+        *color = match *interaction {
+            Interaction::Pressed | Interaction::None => RESTART_BUTTON_COLOR.into(),
+            Interaction::Hovered => RESTART_BUTTON_HOVER.into(),
+        };
     }
 }
 
@@ -1024,9 +1094,7 @@ fn handle_trix_shooting(
         return;
     };
 
-    let touch_shoot = touches
-        .iter_just_pressed()
-        .any(|touch| touch.position().y < WINDOW_HEIGHT - 40.0);
+    let touch_shoot = touches.iter_just_released().count() > 0;
 
     let wants_to_shoot = keyboard.just_pressed(KeyCode::Space)
         || mouse.just_pressed(MouseButton::Left)

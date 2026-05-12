@@ -7,7 +7,7 @@ slug = "trix-blasting"
 locale = "fr_FR"
 +++
 
-Un remake de Space Invaders (work in progress) pour s'amuser avec les nouveautés de Bevy Engine 0.18.1: esquive, shoot and survis aussi longtemps que possible!
+Un remake de Space Invaders (work in progress) pour s'amuser avec les nouveautés de Bevy Engine 0.18.1 : esquive, tire et survis aussi longtemps que possible — chaque touche, chaque raté, chaque nouvelle vague pousse la vitesse un peu plus loin.
 
 ## À propos du jeu
 
@@ -21,9 +21,11 @@ Construit avec **Rust** et **Bevy Engine**, puis transmué en **WebAssembly** po
 - **GAUCHE/DROITE** or **A/D** or **Q/D**: déplacements vers la gauche ou la droite
 - **ESPACE** or **CLICK**: shoot
 
-2. Mobile (Experimental)
-- **TOUCH en bas à gacuhe/droite**: déplacements vers la gauche ou la droite
-- **TOUCH en bas au centre**: shoot
+2. Mobile
+- **TAP + maintenir/glisser sous la ligne de base** : se déplacer à gauche ou à droite selon la position de Trix
+- **TAP (relâché) n'importe où** : tirer
+
+> _"Hej mon secret: spam sous la ligne pour blast en continue ou vise et tire en relachant au bon moment !"_ ~ Trix 🧪💥
 
 <div id="game-container" class="game-container">
   <button id="load-game-btn" class="cta">Jouer à Trix Blasting</button>
