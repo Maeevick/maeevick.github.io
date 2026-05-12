@@ -249,6 +249,23 @@ pub fn aabb_overlaps(pos_a: Vec2, half_a: Vec2, pos_b: Vec2, half_b: Vec2) -> bo
         && (pos_a.y - pos_b.y).abs() < half_a.y + half_b.y
 }
 
+pub fn point_in_triangle(p: Vec2, a: Vec2, b: Vec2, c: Vec2) -> bool {
+    let d1 = (p.x - b.x) * (a.y - b.y) - (a.x - b.x) * (p.y - b.y);
+    let d2 = (p.x - c.x) * (b.y - c.y) - (b.x - c.x) * (p.y - c.y);
+    let d3 = (p.x - a.x) * (c.y - a.y) - (c.x - a.x) * (p.y - a.y);
+    let has_neg = (d1 < 0.0) || (d2 < 0.0) || (d3 < 0.0);
+    let has_pos = (d1 > 0.0) || (d2 > 0.0) || (d3 > 0.0);
+    !(has_neg && has_pos)
+}
+
+pub fn trix_vertices(trix_pos: Vec2, shrink: f32) -> (Vec2, Vec2, Vec2) {
+    let half = TRIX_RENDERED_SIZE / 2.0 - shrink;
+    let apex = trix_pos + Vec2::new(0.0, half);
+    let bl = trix_pos + Vec2::new(-half, -half);
+    let br = trix_pos + Vec2::new(half, -half);
+    (apex, bl, br)
+}
+
 pub fn rows_for_wave_formula(wave: u32, rand_factor: f32) -> usize {
     match wave {
         1 => 1,
@@ -928,22 +945,18 @@ fn check_game_over_conditions(
     };
 
     let trix_pos = trix_transform.translation.truncate();
-    let half_trix = Vec2::splat(TRIX_RENDERED_SIZE / 2.0);
-    let half_alien_bullet = Vec2::new(ALIEN_BULLET_WIDTH / 2.0, ALIEN_BULLET_HEIGHT / 2.0);
+    let (apex, bl, br) = trix_vertices(trix_pos, 1.0);
     let half_alien = Vec2::splat(ALIEN_RENDERED_SIZE / 2.0);
 
     for bullet_transform in alien_bullets.iter() {
-        if aabb_overlaps(
-            bullet_transform.translation.truncate(),
-            half_alien_bullet,
-            trix_pos,
-            half_trix,
-        ) {
+        let bullet_pos = bullet_transform.translation.truncate();
+        if point_in_triangle(bullet_pos, apex, bl, br) {
             next_state.set(GameState::GameOver);
             return;
         }
     }
 
+    let half_trix = Vec2::splat(TRIX_RENDERED_SIZE / 2.0);
     for alien_transform in aliens.iter() {
         let alien_pos = alien_transform.translation.truncate();
         if aabb_overlaps(alien_pos, half_alien, trix_pos, half_trix) {
