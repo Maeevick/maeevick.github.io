@@ -57,7 +57,6 @@ const SHIELDED_HEALTH_MAX: u8 = 8;
 const SPEEDSTER_PROBABILITY: f32 = 0.08;
 const SPEEDSTER_MULTIPLIER_MIN: f32 = 1.2;
 const SPEEDSTER_MULTIPLIER_MAX: f32 = 2.0;
-const SPEEDSTER_ACTIVATION_THRESHOLD: usize = 5;
 
 const RESTART_BUTTON_COLOR: Color = Color::linear_rgb(0.0, 0.63, 0.87);
 const RESTART_BUTTON_HOVER: Color = Color::linear_rgb(0.10, 0.76, 1.0);
@@ -1030,18 +1029,23 @@ fn handle_machinegunner_shooting(
 }
 
 fn handle_speedsters(
-    aliens: Query<Entity, With<Alien>>,
-    speedsters: Query<&Speedster>,
+    aliens: Query<&Alien>,
+    speedsters: Query<(&Alien, &Speedster)>,
     mut boost: ResMut<SpeedsterBoost>,
 ) {
-    if aliens.iter().count() <= SPEEDSTER_ACTIVATION_THRESHOLD && !speedsters.is_empty() {
-        boost.multiplier = speedsters
-            .iter()
-            .map(|s| s.multiplier)
-            .fold(1.0f32, f32::max);
-    } else {
-        boost.multiplier = 1.0;
-    }
+    let occupied: Vec<(usize, usize)> = aliens.iter().map(|a| (a.col, a.row)).collect();
+
+    let active_boost = speedsters
+        .iter()
+        .filter(|(alien, _)| {
+            let (c, r) = (alien.col, alien.row);
+            let side_neighbors = [(c.wrapping_sub(1), r), (c + 1, r)];
+            !side_neighbors.iter().any(|n| occupied.contains(n))
+        })
+        .map(|(_, s)| s.multiplier)
+        .fold(1.0f32, f32::max);
+
+    boost.multiplier = active_boost;
 }
 
 fn handle_speedster_flash(
