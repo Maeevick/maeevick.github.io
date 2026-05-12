@@ -93,6 +93,12 @@ struct AlphaFadeIn {
 struct AlienBullet;
 
 #[derive(Component)]
+struct ExplosionParticle {
+    velocity: Vec2,
+    timer: Timer,
+}
+
+#[derive(Component)]
 struct BulletSplash {
     timer: Timer,
 }
@@ -462,6 +468,7 @@ pub fn create_app(for_wasm: bool) -> App {
             handle_speedster_flash,
             move_alien_bullets,
             animate_bullet_splash,
+            animate_explosion,
             fade_in_aliens,
             check_bullet_alien_collisions,
             check_game_over_conditions,
@@ -485,7 +492,7 @@ pub fn create_app(for_wasm: bool) -> App {
     )
     .add_systems(
         Update,
-        (detect_restart, apply_restart, restart_button_feedback)
+        (detect_restart, apply_restart, restart_button_feedback, animate_explosion)
             .run_if(in_state(GameState::GameOver)),
     )
     .add_systems(OnEnter(GameState::WaveSplash), on_wave_splash_enter)
@@ -941,8 +948,9 @@ fn check_bullet_alien_collisions(
 }
 
 fn check_game_over_conditions(
+    mut commands: Commands,
     aliens: Query<&Transform, With<Alien>>,
-    alien_bullets: Query<&Transform, With<AlienBullet>>,
+    alien_bullets: Query<(Entity, &Transform, &Sprite), With<AlienBullet>>,
     trix_query: Query<&Transform, With<Trix>>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
@@ -954,9 +962,11 @@ fn check_game_over_conditions(
     let (apex, bl, br) = trix_vertices(trix_pos, 1.0);
     let half_alien = Vec2::splat(ALIEN_RENDERED_SIZE / 2.0);
 
-    for bullet_transform in alien_bullets.iter() {
+    for (bullet_entity, bullet_transform, bullet_sprite) in alien_bullets.iter() {
         let bullet_pos = bullet_transform.translation.truncate();
         if point_in_triangle(bullet_pos, apex, bl, br) {
+            spawn_explosion(&mut commands, bullet_pos, bullet_sprite.color);
+            commands.entity(bullet_entity).despawn();
             next_state.set(GameState::GameOver);
             return;
         }
@@ -1107,6 +1117,50 @@ fn move_alien_bullets(
                     custom_size: Some(Vec2::new(ALIEN_BULLET_WIDTH, ALIEN_BULLET_HEIGHT)),
                     ..default()
                 });
+        }
+    }
+}
+
+fn spawn_explosion(commands: &mut Commands, pos: Vec2, color: Color) {
+    let dirs: [Vec2; 8] = [
+        Vec2::new(1.0, 0.0),
+        Vec2::new(0.707, 0.707),
+        Vec2::new(0.0, 1.0),
+        Vec2::new(-0.707, 0.707),
+        Vec2::new(-1.0, 0.0),
+        Vec2::new(-0.707, -0.707),
+        Vec2::new(0.0, -1.0),
+        Vec2::new(0.707, -0.707),
+    ];
+    for dir in dirs {
+        commands.spawn((
+            Sprite {
+                color,
+                custom_size: Some(Vec2::splat(4.0)),
+                ..default()
+            },
+            Transform::from_xyz(pos.x, pos.y, 3.0),
+            ExplosionParticle {
+                velocity: dir * 110.0,
+                timer: Timer::from_seconds(0.4, TimerMode::Once),
+            },
+        ));
+    }
+}
+
+fn animate_explosion(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut particles: Query<(Entity, &mut ExplosionParticle, &mut Transform, &mut Sprite)>,
+) {
+    for (entity, mut particle, mut transform, mut sprite) in particles.iter_mut() {
+        particle.timer.tick(time.delta());
+        let t = particle.timer.fraction();
+        transform.translation += (particle.velocity * time.delta_secs()).extend(0.0);
+        sprite.color = sprite.color.with_alpha(1.0 - t);
+        sprite.custom_size = Some(Vec2::splat(4.0 * (1.0 - t * 0.6)));
+        if particle.timer.just_finished() {
+            commands.entity(entity).despawn();
         }
     }
 }
