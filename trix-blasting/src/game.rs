@@ -223,6 +223,8 @@ type WaveTransitionEntities<'w, 's> = Query<
     Or<(
         With<PlayerBullet>,
         With<AlienBullet>,
+        With<BulletSplash>,
+        With<ExplosionParticle>,
         With<GameOverText>,
         With<Alien>,
     )>,
@@ -492,10 +494,20 @@ pub fn create_app(for_wasm: bool) -> App {
     )
     .add_systems(
         Update,
-        (detect_restart, apply_restart, restart_button_feedback, animate_explosion)
+        (
+            move_alien_bullets,
+            animate_bullet_splash,
+            animate_explosion,
+            detect_restart,
+            apply_restart,
+            restart_button_feedback,
+        )
             .run_if(in_state(GameState::GameOver)),
     )
-    .add_systems(OnEnter(GameState::WaveSplash), on_wave_splash_enter)
+    .add_systems(
+        OnEnter(GameState::WaveSplash),
+        (on_wave_splash_enter, reset_trix_color),
+    )
     .add_systems(OnEnter(GameState::GameOver), on_game_over_enter);
     app
 }
@@ -801,7 +813,58 @@ fn update_speed_display(speed: Res<Speed>, mut query: Query<&mut Text2d, With<Sp
     }
 }
 
-fn on_game_over_enter(mut commands: Commands, score: Res<Score>) {
+fn on_game_over_enter(
+    mut commands: Commands,
+    score: Res<Score>,
+    trix_query: Query<(&Transform, &MeshMaterial2d<ColorMaterial>), With<Trix>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    if let Ok((trix_transform, trix_mat)) = trix_query.single() {
+        if let Some(mat) = materials.get_mut(&trix_mat.0) {
+            mat.color = Color::linear_rgb(0.9, 0.1, 0.1);
+        }
+
+        #[rustfmt::skip]
+        let skull: [bool; 25] = [
+            false, true,  true,  true,  false,
+            true,  false, true,  false, true,
+            true,  true,  true,  true,  true,
+            false, true,  false, true,  false,
+            false, false, true,  false, false,
+        ];
+        let data: Vec<u8> = skull
+            .iter()
+            .flat_map(|&f| if f { [255u8, 255, 255, 255] } else { [0u8, 0, 0, 0] })
+            .collect();
+        let mut img = Image::new(
+            bevy::render::render_resource::Extent3d {
+                width: 5,
+                height: 5,
+                depth_or_array_layers: 1,
+            },
+            bevy::render::render_resource::TextureDimension::D2,
+            data,
+            bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
+            RenderAssetUsages::RENDER_WORLD,
+        );
+        img.sampler = ImageSampler::nearest();
+        let skull_handle = images.add(img);
+
+        commands.spawn((
+            Sprite {
+                image: skull_handle,
+                custom_size: Some(Vec2::splat(10.0)),
+                ..default()
+            },
+            Transform::from_xyz(
+                trix_transform.translation.x,
+                trix_transform.translation.y - TRIX_RENDERED_SIZE / 6.0,
+                2.0,
+            ),
+            GameOverText,
+        ));
+    }
     commands
         .spawn((
             Node {
@@ -845,6 +908,17 @@ fn on_game_over_enter(mut commands: Commands, score: Res<Score>) {
                 });
         });
     println!("Game Over! Score: {}", score.value);
+}
+
+fn reset_trix_color(
+    trix_query: Query<&MeshMaterial2d<ColorMaterial>, With<Trix>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    if let Ok(trix_mat) = trix_query.single()
+        && let Some(mat) = materials.get_mut(&trix_mat.0)
+    {
+        mat.color = TRIX_COLOR;
+    }
 }
 
 fn detect_restart(
@@ -1149,19 +1223,18 @@ fn spawn_explosion(commands: &mut Commands, pos: Vec2, color: Color) {
 }
 
 fn animate_explosion(
-    mut commands: Commands,
     time: Res<Time>,
-    mut particles: Query<(Entity, &mut ExplosionParticle, &mut Transform, &mut Sprite)>,
+    mut particles: Query<(&mut ExplosionParticle, &mut Transform, &mut Sprite)>,
 ) {
-    for (entity, mut particle, mut transform, mut sprite) in particles.iter_mut() {
+    for (mut particle, mut transform, mut sprite) in particles.iter_mut() {
+        if particle.timer.is_finished() {
+            continue;
+        }
         particle.timer.tick(time.delta());
         let t = particle.timer.fraction();
         transform.translation += (particle.velocity * time.delta_secs()).extend(0.0);
-        sprite.color = sprite.color.with_alpha(1.0 - t);
-        sprite.custom_size = Some(Vec2::splat(4.0 * (1.0 - t * 0.6)));
-        if particle.timer.just_finished() {
-            commands.entity(entity).despawn();
-        }
+        sprite.color = sprite.color.with_alpha(1.0 - t * 0.65);
+        sprite.custom_size = Some(Vec2::splat(4.0 * (1.0 - t * 0.5)));
     }
 }
 
