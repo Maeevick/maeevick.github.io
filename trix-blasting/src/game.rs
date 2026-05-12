@@ -1024,20 +1024,9 @@ fn handle_trix_shooting(
         return;
     };
 
-    let trix_wx = trix_transform.translation.x + WINDOW_WIDTH / 2.0;
-    let trix_wy = WINDOW_HEIGHT / 2.0 - trix_transform.translation.y;
-    let half = TRIX_RENDERED_SIZE / 2.0;
-
-    let touch_shoot = touches.iter_just_pressed().any(|touch| {
-        let pos = touch.position();
-        if pos.y > WINDOW_HEIGHT - 40.0
-            && pos.x >= WINDOW_WIDTH / 3.0
-            && pos.x <= 2.0 * WINDOW_WIDTH / 3.0
-        {
-            return true;
-        }
-        (pos.x - trix_wx).abs() < half && (pos.y - trix_wy).abs() < half
-    });
+    let touch_shoot = touches
+        .iter_just_pressed()
+        .any(|touch| touch.position().y < WINDOW_HEIGHT - 40.0);
 
     let wants_to_shoot = keyboard.just_pressed(KeyCode::Space)
         || mouse.just_pressed(MouseButton::Left)
@@ -1150,6 +1139,10 @@ fn move_trix(
     speed: Res<Speed>,
     time: Res<Time>,
 ) {
+    let Ok(mut trix_transform) = trix_query.single_mut() else {
+        return;
+    };
+
     let mut direction = 0.0f32;
 
     if keyboard.pressed(KeyCode::ArrowLeft)
@@ -1162,12 +1155,13 @@ fn move_trix(
         direction += 1.0;
     }
 
+    let trix_wx = trix_transform.translation.x + WINDOW_WIDTH / 2.0;
     for touch in touches.iter() {
         let pos = touch.position();
         if pos.y > WINDOW_HEIGHT - 40.0 {
-            if pos.x < WINDOW_WIDTH / 3.0 {
+            if pos.x < trix_wx {
                 direction -= 1.0;
-            } else if pos.x > 2.0 * WINDOW_WIDTH / 3.0 {
+            } else if pos.x > trix_wx {
                 direction += 1.0;
             }
         }
@@ -1183,11 +1177,9 @@ fn move_trix(
     let left_boundary = -WINDOW_WIDTH / 2.0 + TRIX_RENDERED_SIZE / 2.0;
     let right_boundary = WINDOW_WIDTH / 2.0 - TRIX_RENDERED_SIZE / 2.0;
 
-    for mut transform in trix_query.iter_mut() {
-        transform.translation.x = (transform.translation.x
-            + direction * trix_speed * time.delta_secs())
-        .clamp(left_boundary, right_boundary);
-    }
+    trix_transform.translation.x = (trix_transform.translation.x
+        + direction * trix_speed * time.delta_secs())
+    .clamp(left_boundary, right_boundary);
 }
 
 #[cfg(test)]
