@@ -61,6 +61,9 @@ const SPEEDSTER_MULTIPLIER_MAX: f32 = 2.0;
 const RESTART_BUTTON_COLOR: Color = Color::linear_rgb(0.0, 0.63, 0.87);
 const RESTART_BUTTON_HOVER: Color = Color::linear_rgb(0.10, 0.76, 1.0);
 
+const CAMERA_SHAKE_DURATION: f32 = 1.5;
+const CAMERA_SHAKE_AMPLITUDE: f32 = 6.0;
+
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GameState {
     #[default]
@@ -129,6 +132,17 @@ struct Score {
 
 #[derive(Resource, Default)]
 struct RestartPending(bool);
+
+#[derive(Resource)]
+struct CameraShake {
+    elapsed: f32,
+}
+
+impl CameraShake {
+    fn inactive() -> Self {
+        Self { elapsed: f32::MAX }
+    }
+}
 
 #[derive(Component)]
 struct WaveDisplay;
@@ -435,6 +449,7 @@ pub fn create_app(for_wasm: bool) -> App {
     .insert_resource(Score::default())
     .insert_resource(SpeedsterBoost::new())
     .insert_resource(RestartPending::default())
+    .insert_resource(CameraShake::inactive())
     .insert_resource(WaveSplashTimer(Timer::from_seconds(
         WAVE_SPLASH_DURATION_SECS,
         TimerMode::Once,
@@ -484,6 +499,7 @@ pub fn create_app(for_wasm: bool) -> App {
             check_game_over_conditions,
             animate_bullet_splash,
             animate_explosion,
+            update_camera_shake,
             detect_restart,
             apply_restart,
             restart_button_feedback,
@@ -492,7 +508,7 @@ pub fn create_app(for_wasm: bool) -> App {
     )
     .add_systems(
         OnEnter(GameState::WaveSplash),
-        (on_wave_splash_enter, reset_trix_color),
+        (on_wave_splash_enter, reset_trix_color, reset_camera),
     )
     .add_systems(OnEnter(GameState::GameOver), on_game_over_enter);
     app
@@ -837,9 +853,12 @@ fn update_speed_display(speed: Res<Speed>, mut query: Query<&mut Text2d, With<Sp
 fn on_game_over_enter(
     mut commands: Commands,
     score: Res<Score>,
+    mut shake: ResMut<CameraShake>,
     mut trix_query: Query<(&Transform, &mut Sprite), With<Trix>>,
     mut images: ResMut<Assets<Image>>,
 ) {
+    shake.elapsed = 0.0;
+
     if let Ok((trix_transform, mut trix_sprite)) = trix_query.single_mut() {
         trix_sprite.color = Color::linear_rgb(0.9, 0.1, 0.1);
 
@@ -1213,6 +1232,33 @@ fn move_alien_bullets(
                     ..default()
                 });
         }
+    }
+}
+
+fn update_camera_shake(
+    time: Res<Time>,
+    mut shake: ResMut<CameraShake>,
+    mut camera: Query<&mut Transform, With<Camera2d>>,
+) {
+    let Ok(mut transform) = camera.single_mut() else {
+        return;
+    };
+    if shake.elapsed >= CAMERA_SHAKE_DURATION {
+        transform.translation.x = 0.0;
+        transform.translation.y = 0.0;
+        return;
+    }
+    shake.elapsed += time.delta_secs();
+    let t = shake.elapsed / CAMERA_SHAKE_DURATION;
+    let amplitude = CAMERA_SHAKE_AMPLITUDE * (1.0 - t);
+    transform.translation.x = amplitude * (shake.elapsed * 47.0).sin();
+    transform.translation.y = amplitude * (shake.elapsed * 31.0).cos();
+}
+
+fn reset_camera(mut camera: Query<&mut Transform, With<Camera2d>>) {
+    if let Ok(mut transform) = camera.single_mut() {
+        transform.translation.x = 0.0;
+        transform.translation.y = 0.0;
     }
 }
 
