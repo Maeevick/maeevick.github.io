@@ -480,6 +480,7 @@ pub fn create_app(for_wasm: bool) -> App {
         Update,
         (
             move_alien_bullets,
+            check_game_over_conditions,
             animate_bullet_splash,
             animate_explosion,
             detect_restart,
