@@ -96,6 +96,7 @@ struct AlienBullet;
 struct ExplosionParticle {
     velocity: Vec2,
     timer: Timer,
+    lifetime: Timer,
 }
 
 #[derive(Component)]
@@ -988,7 +989,7 @@ fn restart_button_feedback(
 
 fn check_bullet_alien_collisions(
     mut commands: Commands,
-    bullets: Query<(Entity, &Transform), With<PlayerBullet>>,
+    bullets: Query<(Entity, &Transform, &Sprite), With<PlayerBullet>>,
     aliens: Query<(Entity, &Transform), With<Alien>>,
     mut shielded: Query<&mut Shielded>,
     mut speed: ResMut<Speed>,
@@ -999,9 +1000,9 @@ fn check_bullet_alien_collisions(
 
     let mut used_bullets = std::collections::HashSet::new();
     let mut used_aliens = std::collections::HashSet::new();
-    let mut hit_pairs: Vec<(Entity, Entity)> = Vec::new();
+    let mut hit_pairs: Vec<(Entity, Entity, Vec2, Color)> = Vec::new();
 
-    for (bullet_entity, bullet_transform) in bullets.iter() {
+    for (bullet_entity, bullet_transform, bullet_sprite) in bullets.iter() {
         if used_bullets.contains(&bullet_entity) {
             continue;
         }
@@ -1017,13 +1018,13 @@ fn check_bullet_alien_collisions(
             ) {
                 used_bullets.insert(bullet_entity);
                 used_aliens.insert(alien_entity);
-                hit_pairs.push((bullet_entity, alien_entity));
+                hit_pairs.push((bullet_entity, alien_entity, alien_transform.translation.truncate(), bullet_sprite.color));
                 break;
             }
         }
     }
 
-    for (bullet_entity, alien_entity) in &hit_pairs {
+    for (bullet_entity, alien_entity, alien_pos, bullet_color) in &hit_pairs {
         commands.entity(*bullet_entity).despawn();
         score.value += 1;
         speed.current = speed_after_hit(speed.current);
@@ -1031,9 +1032,11 @@ fn check_bullet_alien_collisions(
             if s.health > 1 {
                 s.health -= 1;
             } else {
+                spawn_explosion(&mut commands, *alien_pos, *bullet_color);
                 commands.entity(*alien_entity).despawn();
             }
         } else {
+            spawn_explosion(&mut commands, *alien_pos, *bullet_color);
             commands.entity(*alien_entity).despawn();
         }
     }
@@ -1235,16 +1238,23 @@ fn spawn_explosion(commands: &mut Commands, pos: Vec2, color: Color) {
             ExplosionParticle {
                 velocity: dir * 110.0,
                 timer: Timer::from_seconds(0.4, TimerMode::Once),
+                lifetime: Timer::from_seconds(1.5, TimerMode::Once),
             },
         ));
     }
 }
 
 fn animate_explosion(
+    mut commands: Commands,
     time: Res<Time>,
-    mut particles: Query<(&mut ExplosionParticle, &mut Transform, &mut Sprite)>,
+    mut particles: Query<(Entity, &mut ExplosionParticle, &mut Transform, &mut Sprite)>,
 ) {
-    for (mut particle, mut transform, mut sprite) in particles.iter_mut() {
+    for (entity, mut particle, mut transform, mut sprite) in particles.iter_mut() {
+        particle.lifetime.tick(time.delta());
+        if particle.lifetime.just_finished() {
+            commands.entity(entity).despawn();
+            continue;
+        }
         if particle.timer.is_finished() {
             continue;
         }
