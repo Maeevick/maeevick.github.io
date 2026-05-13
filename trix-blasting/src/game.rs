@@ -58,6 +58,8 @@ const SPEEDSTER_PROBABILITY: f32 = 0.08;
 const SPEEDSTER_MULTIPLIER_MIN: f32 = 1.2;
 const SPEEDSTER_MULTIPLIER_MAX: f32 = 2.0;
 
+const START_BUTTON_COLOR: Color = Color::linear_rgb(0.89, 0.13, 0.74);
+const START_BUTTON_HOVER: Color = Color::linear_rgb(0.71, 0.09, 0.58);
 const RESTART_BUTTON_COLOR: Color = Color::linear_rgb(0.0, 0.63, 0.87);
 const RESTART_BUTTON_HOVER: Color = Color::linear_rgb(0.10, 0.76, 1.0);
 
@@ -67,6 +69,7 @@ const CAMERA_SHAKE_AMPLITUDE: f32 = 6.0;
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GameState {
     #[default]
+    Menu,
     Running,
     WaveSplash,
     GameOver,
@@ -115,6 +118,9 @@ struct CooldownBar;
 
 #[derive(Component)]
 struct GameOverText;
+
+#[derive(Component)]
+struct StartButton;
 
 #[derive(Component)]
 struct RestartButton;
@@ -456,6 +462,12 @@ pub fn create_app(for_wasm: bool) -> App {
     )))
     .init_state::<GameState>()
     .add_systems(Startup, setup)
+    .add_systems(OnEnter(GameState::Menu), on_menu_enter)
+    .add_systems(OnExit(GameState::Menu), on_menu_exit)
+    .add_systems(
+        Update,
+        (handle_menu_input, start_button_feedback).run_if(in_state(GameState::Menu)),
+    )
     .add_systems(
         Update,
         (
@@ -1259,6 +1271,79 @@ fn reset_camera(mut camera: Query<&mut Transform, With<Camera2d>>) {
     if let Ok(mut transform) = camera.single_mut() {
         transform.translation.x = 0.0;
         transform.translation.y = 0.0;
+    }
+}
+
+fn on_menu_enter(mut commands: Commands) {
+    commands
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                position_type: PositionType::Absolute,
+                ..default()
+            },
+            BackgroundColor(Color::NONE),
+            StartButton,
+        ))
+        .with_children(|parent| {
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(280.0),
+                        height: Val::Px(120.0),
+                        border: UiRect::all(Val::Px(3.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        border_radius: BorderRadius::all(Val::Px(8.0)),
+                        ..default()
+                    },
+                    BorderColor::all(Color::WHITE),
+                    BackgroundColor(START_BUTTON_COLOR),
+                    StartButton,
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("TRIX BLASTING\n\nPLAY"),
+                        TextFont {
+                            font_size: 24.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                        TextLayout::new_with_justify(Justify::Center),
+                    ));
+                });
+        });
+}
+
+fn on_menu_exit(mut commands: Commands, menu_entities: Query<Entity, With<StartButton>>) {
+    for entity in menu_entities.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+fn handle_menu_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    start_btn: Query<&Interaction, (Changed<Interaction>, With<StartButton>)>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    let button_clicked = start_btn.iter().any(|i| *i == Interaction::Pressed);
+    if button_clicked || keyboard.just_pressed(KeyCode::Enter) {
+        next_state.set(GameState::WaveSplash);
+    }
+}
+
+fn start_button_feedback(
+    mut buttons: Query<(&Interaction, &mut BackgroundColor), With<StartButton>>,
+) {
+    for (interaction, mut color) in &mut buttons {
+        *color = match *interaction {
+            Interaction::Pressed | Interaction::None => START_BUTTON_COLOR.into(),
+            Interaction::Hovered => START_BUTTON_HOVER.into(),
+        };
     }
 }
 
