@@ -512,13 +512,7 @@ pub fn create_app(for_wasm: bool) -> App {
     app
 }
 
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    mut images: ResMut<Assets<Image>>,
-    swarm: Res<Swarm>,
-) {
+fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, swarm: Res<Swarm>) {
     commands.spawn(Camera2d);
 
     commands.spawn((
@@ -530,14 +524,55 @@ fn setup(
         Transform::from_xyz(0.0, BASELINE_Y, 0.0),
     ));
 
-    let triangle = Triangle2d::new(
-        Vec2::new(0.0, TRIX_RENDERED_SIZE / 2.0),
-        Vec2::new(-TRIX_RENDERED_SIZE / 2.0, -TRIX_RENDERED_SIZE / 2.0),
-        Vec2::new(TRIX_RENDERED_SIZE / 2.0, -TRIX_RENDERED_SIZE / 2.0),
+    #[rustfmt::skip]
+    let ship: [bool; 225] = [
+        false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,
+        false,false,false,false,false,false,true, true, true,false,false,false,false,false,false,
+        false,false,false,false,false,true,true , true, true,true ,false,false,false,false,false,
+        false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,
+        false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,
+        false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,
+        true ,false,false,false,false,false,true, true, true,false,false,false,false,false, true,
+        true ,false,false,false,false,true, true, true, true,true,false,false,false,false, true,
+        true, true ,true ,true ,true, true, true, true, true, true, true, true, true, true, true,
+        true, true ,true ,true ,true, true, true, true, true, true, true, true, true, true, true,
+        true ,false,false,false,false,false,false,true,false,false,false,false,false,false, true,
+        false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,
+        false,false,false,false,false,false,true, true, true,false,false,false,false,false,false,
+        false,false,false,false,false,true ,true, true, true,true ,false,false,false,false,false,
+        false,false,false,false,false,false,true,false, true,false,false,false,false,false,false,
+    ];
+    let ship_data: Vec<u8> = ship
+        .iter()
+        .flat_map(|&f| {
+            if f {
+                [255u8, 255, 255, 255]
+            } else {
+                [0u8, 0, 0, 0]
+            }
+        })
+        .collect();
+    let mut ship_img = Image::new(
+        Extent3d {
+            width: 15,
+            height: 15,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        ship_data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
     );
+    ship_img.sampler = ImageSampler::nearest();
+    let ship_handle = images.add(ship_img);
+
     commands.spawn((
-        Mesh2d(meshes.add(triangle)),
-        MeshMaterial2d(materials.add(TRIX_COLOR)),
+        Sprite {
+            image: ship_handle,
+            color: TRIX_COLOR,
+            custom_size: Some(Vec2::splat(TRIX_RENDERED_SIZE)),
+            ..default()
+        },
         Transform::from_xyz(0.0, TRIX_Y, 1.0),
         Trix,
     ));
@@ -816,14 +851,11 @@ fn update_speed_display(speed: Res<Speed>, mut query: Query<&mut Text2d, With<Sp
 fn on_game_over_enter(
     mut commands: Commands,
     score: Res<Score>,
-    trix_query: Query<(&Transform, &MeshMaterial2d<ColorMaterial>), With<Trix>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut trix_query: Query<(&Transform, &mut Sprite), With<Trix>>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    if let Ok((trix_transform, trix_mat)) = trix_query.single() {
-        if let Some(mat) = materials.get_mut(&trix_mat.0) {
-            mat.color = Color::linear_rgb(0.9, 0.1, 0.1);
-        }
+    if let Ok((trix_transform, mut trix_sprite)) = trix_query.single_mut() {
+        trix_sprite.color = Color::linear_rgb(0.9, 0.1, 0.1);
 
         #[rustfmt::skip]
         let skull: [bool; 25] = [
@@ -835,7 +867,13 @@ fn on_game_over_enter(
         ];
         let data: Vec<u8> = skull
             .iter()
-            .flat_map(|&f| if f { [255u8, 255, 255, 255] } else { [0u8, 0, 0, 0] })
+            .flat_map(|&f| {
+                if f {
+                    [255u8, 255, 255, 255]
+                } else {
+                    [0u8, 0, 0, 0]
+                }
+            })
             .collect();
         let mut img = Image::new(
             bevy::render::render_resource::Extent3d {
@@ -910,14 +948,9 @@ fn on_game_over_enter(
     println!("Game Over! Score: {}", score.value);
 }
 
-fn reset_trix_color(
-    trix_query: Query<&MeshMaterial2d<ColorMaterial>, With<Trix>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
-    if let Ok(trix_mat) = trix_query.single()
-        && let Some(mat) = materials.get_mut(&trix_mat.0)
-    {
-        mat.color = TRIX_COLOR;
+fn reset_trix_color(mut trix_query: Query<&mut Sprite, With<Trix>>) {
+    if let Ok(mut sprite) = trix_query.single_mut() {
+        sprite.color = TRIX_COLOR;
     }
 }
 
