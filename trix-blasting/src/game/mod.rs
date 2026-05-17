@@ -10,6 +10,9 @@ use rand::RngExt;
 mod components;
 use components::*;
 
+mod resources;
+use resources::*;
+
 pub const WINDOW_WIDTH: f32 = 400.0;
 pub const WINDOW_HEIGHT: f32 = 600.0;
 const WINDOW_WIDTH_PX: u32 = 400;
@@ -79,79 +82,9 @@ pub enum GameState {
 }
 
 
-#[derive(Resource, Default)]
-struct Score {
-    value: u32,
-}
-
-#[derive(Resource, Default)]
-struct RestartPending(bool);
-
-#[derive(Resource)]
-struct CameraShake {
-    elapsed: f32,
-}
-
-impl CameraShake {
-    fn inactive() -> Self {
-        Self { elapsed: f32::MAX }
-    }
-}
 
 
-#[derive(Resource)]
-struct Speed {
-    current: f32,
-}
 
-impl Speed {
-    fn new() -> Self {
-        Self {
-            current: BASE_GAME_SPEED,
-        }
-    }
-}
-
-#[derive(Resource)]
-struct PlayerShootCooldown(f32);
-
-#[derive(Resource)]
-struct Swarm {
-    center_x: f32,
-    center_y: f32,
-    direction: f32,
-}
-
-impl Swarm {
-    fn new() -> Self {
-        Self {
-            center_x: 0.0,
-            center_y: SWARM_START_Y,
-            direction: 1.0,
-        }
-    }
-}
-
-#[derive(Resource)]
-struct Wave {
-    number: u32,
-    spawn_count: usize,
-}
-
-#[derive(Resource)]
-struct WaveSplashTimer(Timer);
-
-
-#[derive(Resource)]
-struct SpeedsterBoost {
-    multiplier: f32,
-}
-
-impl SpeedsterBoost {
-    fn new() -> Self {
-        Self { multiplier: 1.0 }
-    }
-}
 
 type CooldownBarQuery<'w, 's> = Query<
     'w,
