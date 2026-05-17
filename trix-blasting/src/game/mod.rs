@@ -7,6 +7,9 @@ use bevy::{
 };
 use rand::RngExt;
 
+mod components;
+use components::*;
+
 pub const WINDOW_WIDTH: f32 = 400.0;
 pub const WINDOW_HEIGHT: f32 = 600.0;
 const WINDOW_WIDTH_PX: u32 = 400;
@@ -75,61 +78,6 @@ pub enum GameState {
     GameOver,
 }
 
-#[derive(Component)]
-struct Trix;
-
-#[derive(Component)]
-struct Alien {
-    col: usize,
-    row: usize,
-    color: Color,
-}
-
-#[derive(Component)]
-struct AlienShooter {
-    timer: Timer,
-}
-
-#[derive(Component)]
-struct AlphaFadeIn {
-    timer: Timer,
-}
-
-#[derive(Component)]
-struct AlienBullet;
-
-#[derive(Component)]
-struct ExplosionParticle {
-    velocity: Vec2,
-    timer: Timer,
-    lifetime: Timer,
-}
-
-#[derive(Component)]
-struct BulletSplash {
-    timer: Timer,
-}
-
-#[derive(Component)]
-struct PlayerBullet;
-
-#[derive(Component)]
-struct CooldownBar;
-
-#[derive(Component)]
-struct GameOverText;
-
-#[derive(Component)]
-struct StartButton;
-
-#[derive(Component)]
-struct RestartButton;
-
-#[derive(Component)]
-struct ScoreDisplay;
-
-#[derive(Component)]
-struct SpeedDisplay;
 
 #[derive(Resource, Default)]
 struct Score {
@@ -150,11 +98,6 @@ impl CameraShake {
     }
 }
 
-#[derive(Component)]
-struct WaveDisplay;
-
-#[derive(Component)]
-struct SplashText;
 
 #[derive(Resource)]
 struct Speed {
@@ -198,26 +141,6 @@ struct Wave {
 #[derive(Resource)]
 struct WaveSplashTimer(Timer);
 
-#[derive(Component)]
-struct Machinegunner {
-    burst_count: u8,
-    remaining: u8,
-    burst_elapsed: f32,
-    idle_elapsed: f32,
-    idle_interval: f32,
-}
-
-#[derive(Component)]
-struct Shielded {
-    health: u8,
-}
-
-#[derive(Component)]
-struct Speedster {
-    multiplier: f32,
-    base_color: Color,
-    flash_elapsed: f32,
-}
 
 #[derive(Resource)]
 struct SpeedsterBoost {
