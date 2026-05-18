@@ -93,6 +93,14 @@ pub(crate) fn pick_rainbow_color(rng: &mut impl rand::RngExt) -> [u8; 4] {
     ]
 }
 
+fn brighten_bullet(color: Color) -> Color {
+    let hsla = Hsla::from(color);
+    Color::from(Hsla {
+        lightness: hsla.lightness.max(0.65),
+        ..hsla
+    })
+}
+
 pub(crate) fn pick_complementary_pair(rng: &mut impl rand::RngExt) -> ([u8; 4], [u8; 4]) {
     let hue: f32 = rng.random_range(0.0..360.0);
     let brightness: f32 = rng.random_range(0.7..1.0);
@@ -778,7 +786,7 @@ pub(crate) fn handle_alien_shooting(
         if shooter.timer.just_finished() {
             commands.spawn((
                 Sprite {
-                    color: alien.color,
+                    color: brighten_bullet(alien.color),
                     custom_size: Some(Vec2::new(ALIEN_BULLET_WIDTH, ALIEN_BULLET_HEIGHT)),
                     ..default()
                 },
