@@ -1,5 +1,5 @@
-use bevy::prelude::*;
 use super::{BASE_GAME_SPEED, SWARM_START_Y};
+use bevy::prelude::*;
 
 // /////////////////////////////////////////////////////////////
 // GAME MECHANICS
@@ -17,7 +17,9 @@ pub(crate) struct Speed {
 
 impl Speed {
     pub(crate) fn new() -> Self {
-        Self { current: BASE_GAME_SPEED }
+        Self {
+            current: BASE_GAME_SPEED,
+        }
     }
 }
 

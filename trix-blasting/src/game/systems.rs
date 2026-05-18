@@ -1,12 +1,11 @@
+use super::Phase;
+use super::*;
 use bevy::{
     asset::RenderAssetUsages,
     image::ImageSampler,
-    prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 use rand::RngExt;
-use super::*;
-use super::Phase;
 
 // /////////////////////////////////////////////////////////////
 // DATA
@@ -179,10 +178,20 @@ pub(crate) fn on_startup(mut commands: Commands, mut images: ResMut<Assets<Image
     ];
     let ship_data: Vec<u8> = ship
         .iter()
-        .flat_map(|&f| if f { [255u8, 255, 255, 255] } else { [0u8, 0, 0, 0] })
+        .flat_map(|&f| {
+            if f {
+                [255u8, 255, 255, 255]
+            } else {
+                [0u8, 0, 0, 0]
+            }
+        })
         .collect();
     let mut ship_img = Image::new(
-        Extent3d { width: 15, height: 15, depth_or_array_layers: 1 },
+        Extent3d {
+            width: 15,
+            height: 15,
+            depth_or_array_layers: 1,
+        },
         TextureDimension::D2,
         ship_data,
         TextureFormat::Rgba8UnormSrgb,
@@ -213,7 +222,10 @@ pub(crate) fn on_startup(mut commands: Commands, mut images: ResMut<Assets<Image
     ));
 
     let hud_y = WINDOW_HEIGHT / 2.0 - 22.0;
-    let hud_font = TextFont { font_size: 16.0, ..default() };
+    let hud_font = TextFont {
+        font_size: 16.0,
+        ..default()
+    };
     let hud_color = TextColor(Color::linear_rgb(0.75, 0.75, 0.75));
 
     commands.spawn((
@@ -277,9 +289,17 @@ pub(crate) fn spawn_alien_wave(
             let is_shooter = !is_special && rng.random::<f32>() < ALIEN_SHOOTER_PROBABILITY;
 
             let shape_idx = rng.random_range(0..ALIEN_SHAPES.len());
+            let mut machinegunner_color: Option<Color> = None;
             let mut speedster_base_color: Option<Color> = None;
             let image_handle = if is_machinegunner {
                 let (ca, cb) = pick_complementary_pair(&mut rng);
+                let [r, g, b, _] = ca;
+                machinegunner_color = Some(Color::srgba(
+                    r as f32 / 255.0,
+                    g as f32 / 255.0,
+                    b as f32 / 255.0,
+                    1.0,
+                ));
                 make_alien_image(
                     images,
                     special_alien_pixel_data(ca, cb, &ALIEN_SHAPES[shape_idx]),
@@ -330,7 +350,9 @@ pub(crate) fn spawn_alien_wave(
                 Alien {
                     col,
                     row,
-                    color: alien_color,
+                    color: machinegunner_color
+                        .or(speedster_base_color)
+                        .unwrap_or(alien_color),
                 },
             ));
 
@@ -366,8 +388,7 @@ pub(crate) fn spawn_alien_wave(
                 });
             }
             if is_shooter {
-                let interval =
-                    rng.random_range(ALIEN_SHOOT_INTERVAL_MIN..ALIEN_SHOOT_INTERVAL_MAX);
+                let interval = rng.random_range(ALIEN_SHOOT_INTERVAL_MIN..ALIEN_SHOOT_INTERVAL_MAX);
                 entity.insert(AlienShooter {
                     timer: Timer::from_seconds(interval, TimerMode::Repeating),
                 });
@@ -453,7 +474,10 @@ pub(crate) fn on_menu_enter(mut commands: Commands) {
         });
 }
 
-pub(crate) fn on_menu_exit(mut commands: Commands, menu_entities: Query<Entity, With<StartButton>>) {
+pub(crate) fn on_menu_exit(
+    mut commands: Commands,
+    menu_entities: Query<Entity, With<StartButton>>,
+) {
     for entity in menu_entities.iter() {
         commands.entity(entity).despawn();
     }
@@ -760,9 +784,7 @@ pub(crate) fn handle_alien_shooting(
                 },
                 Transform::from_xyz(
                     transform.translation.x,
-                    transform.translation.y
-                        - ALIEN_RENDERED_SIZE / 2.0
-                        - ALIEN_BULLET_HEIGHT / 2.0,
+                    transform.translation.y - ALIEN_RENDERED_SIZE / 2.0 - ALIEN_BULLET_HEIGHT / 2.0,
                     2.0,
                 ),
                 AlienBullet,
