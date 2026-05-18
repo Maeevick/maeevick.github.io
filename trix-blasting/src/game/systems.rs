@@ -6,6 +6,7 @@ use bevy::{
 };
 use rand::RngExt;
 use super::*;
+use super::Phase;
 
 // /////////////////////////////////////////////////////////////
 // DATA
@@ -143,14 +144,10 @@ fn rows_for_wave(wave: u32) -> usize {
 }
 
 // /////////////////////////////////////////////////////////////
-// SETUP
+// STARTUP
 // /////////////////////////////////////////////////////////////
 
-pub(crate) fn setup(
-    mut commands: Commands,
-    mut images: ResMut<Assets<Image>>,
-    swarm: Res<Swarm>,
-) {
+pub(crate) fn on_startup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn(Camera2d);
 
     commands.spawn((
@@ -182,20 +179,10 @@ pub(crate) fn setup(
     ];
     let ship_data: Vec<u8> = ship
         .iter()
-        .flat_map(|&f| {
-            if f {
-                [255u8, 255, 255, 255]
-            } else {
-                [0u8, 0, 0, 0]
-            }
-        })
+        .flat_map(|&f| if f { [255u8, 255, 255, 255] } else { [0u8, 0, 0, 0] })
         .collect();
     let mut ship_img = Image::new(
-        Extent3d {
-            width: 15,
-            height: 15,
-            depth_or_array_layers: 1,
-        },
+        Extent3d { width: 15, height: 15, depth_or_array_layers: 1 },
         TextureDimension::D2,
         ship_data,
         TextureFormat::Rgba8UnormSrgb,
@@ -226,10 +213,7 @@ pub(crate) fn setup(
     ));
 
     let hud_y = WINDOW_HEIGHT / 2.0 - 22.0;
-    let hud_font = TextFont {
-        font_size: 16.0,
-        ..default()
-    };
+    let hud_font = TextFont { font_size: 16.0, ..default() };
     let hud_color = TextColor(Color::linear_rgb(0.75, 0.75, 0.75));
 
     commands.spawn((
@@ -255,8 +239,6 @@ pub(crate) fn setup(
         Transform::from_xyz(130.0, hud_y, 5.0),
         SpeedDisplay,
     ));
-
-    spawn_alien_wave(&mut commands, &mut images, &swarm, 1, false);
 
     println!("Trix Blasting ready.");
 }
@@ -480,11 +462,11 @@ pub(crate) fn on_menu_exit(mut commands: Commands, menu_entities: Query<Entity, 
 pub(crate) fn handle_menu_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     start_btn: Query<&Interaction, (Changed<Interaction>, With<StartButton>)>,
-    mut next_state: ResMut<NextState<GameState>>,
+    mut next_state: ResMut<NextState<Phase>>,
 ) {
     let button_clicked = start_btn.iter().any(|i| *i == Interaction::Pressed);
     if button_clicked || keyboard.just_pressed(KeyCode::Enter) {
-        next_state.set(GameState::WaveSplash);
+        next_state.set(Phase::WaveSplash);
     }
 }
 
@@ -539,7 +521,7 @@ pub(crate) fn tick_wave_splash(
     mut commands: Commands,
     time: Res<Time>,
     mut timer: ResMut<WaveSplashTimer>,
-    mut next_state: ResMut<NextState<GameState>>,
+    mut next_state: ResMut<NextState<Phase>>,
     splash_query: Query<Entity, With<SplashText>>,
 ) {
     timer.0.tick(time.delta());
@@ -547,7 +529,7 @@ pub(crate) fn tick_wave_splash(
         for entity in splash_query.iter() {
             commands.entity(entity).despawn();
         }
-        next_state.set(GameState::Running);
+        next_state.set(Phase::Running);
     }
 }
 
@@ -556,14 +538,14 @@ pub(crate) fn check_wave_cleared(
     mut speed: ResMut<Speed>,
     mut wave: ResMut<Wave>,
     mut score: ResMut<Score>,
-    mut next_state: ResMut<NextState<GameState>>,
+    mut next_state: ResMut<NextState<Phase>>,
 ) {
     if aliens.is_empty() {
         let bonus = wave.spawn_count;
         speed.current = speed_after_wave(speed.current, bonus);
         score.value += bonus as u32;
         wave.number += 1;
-        next_state.set(GameState::WaveSplash);
+        next_state.set(Phase::WaveSplash);
     }
 }
 
@@ -964,7 +946,7 @@ pub(crate) fn check_game_over_conditions(
     aliens: Query<&Transform, With<Alien>>,
     alien_bullets: Query<(Entity, &Transform, &Sprite), With<AlienBullet>>,
     trix_query: Query<&Transform, With<Trix>>,
-    mut next_state: ResMut<NextState<GameState>>,
+    mut next_state: ResMut<NextState<Phase>>,
 ) {
     let Ok(trix_transform) = trix_query.single() else {
         return;
@@ -980,7 +962,7 @@ pub(crate) fn check_game_over_conditions(
         if aabb_overlaps(trix_pos, half_trix_shrunk, bullet_pos, half_bullet) {
             spawn_explosion(&mut commands, bullet_pos, bullet_sprite.color);
             commands.entity(bullet_entity).despawn();
-            next_state.set(GameState::GameOver);
+            next_state.set(Phase::GameOver);
             return;
         }
     }
@@ -988,11 +970,11 @@ pub(crate) fn check_game_over_conditions(
     for alien_transform in aliens.iter() {
         let alien_pos = alien_transform.translation.truncate();
         if aabb_overlaps(alien_pos, half_alien, trix_pos, half_trix_shrunk) {
-            next_state.set(GameState::GameOver);
+            next_state.set(Phase::GameOver);
             return;
         }
         if alien_transform.translation.y - ALIEN_RENDERED_SIZE / 2.0 <= BASELINE_Y {
-            next_state.set(GameState::GameOver);
+            next_state.set(Phase::GameOver);
             return;
         }
     }
@@ -1242,7 +1224,7 @@ pub(crate) fn apply_restart(
     mut cooldown: ResMut<PlayerShootCooldown>,
     mut score: ResMut<Score>,
     mut boost: ResMut<SpeedsterBoost>,
-    mut next_state: ResMut<NextState<GameState>>,
+    mut next_state: ResMut<NextState<Phase>>,
 ) {
     if !pending.0 {
         return;
@@ -1254,7 +1236,7 @@ pub(crate) fn apply_restart(
     cooldown.0 = 0.0;
     score.value = 0;
     boost.multiplier = 1.0;
-    next_state.set(GameState::WaveSplash);
+    next_state.set(Phase::WaveSplash);
 }
 
 pub(crate) fn restart_button_feedback(

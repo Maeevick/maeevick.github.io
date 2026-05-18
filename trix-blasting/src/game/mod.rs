@@ -76,11 +76,11 @@ pub(crate) const CAMERA_SHAKE_DURATION: f32 = 1.5;
 pub(crate) const CAMERA_SHAKE_AMPLITUDE: f32 = 6.0;
 
 // /////////////////////////////////////////////////////////////
-// GAME STATE
+// STATE
 // /////////////////////////////////////////////////////////////
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
-pub enum GameState {
+pub enum Phase {
     #[default]
     Menu,
     Running,
@@ -130,13 +130,13 @@ pub fn create_app(for_wasm: bool) -> App {
         WAVE_SPLASH_DURATION_SECS,
         TimerMode::Once,
     )))
-    .init_state::<GameState>()
-    .add_systems(Startup, setup)
-    .add_systems(OnEnter(GameState::Menu), on_menu_enter)
-    .add_systems(OnExit(GameState::Menu), on_menu_exit)
+    .init_state::<Phase>()
+    .add_systems(Startup, on_startup)
+    .add_systems(OnEnter(Phase::Menu), on_menu_enter)
+    .add_systems(OnExit(Phase::Menu), on_menu_exit)
     .add_systems(
         Update,
-        (handle_menu_input, start_button_feedback).run_if(in_state(GameState::Menu)),
+        (handle_menu_input, start_button_feedback).run_if(in_state(Phase::Menu)),
     )
     .add_systems(
         Update,
@@ -161,7 +161,7 @@ pub fn create_app(for_wasm: bool) -> App {
             update_wave_display,
             update_speed_display,
         )
-            .run_if(in_state(GameState::Running)),
+            .run_if(in_state(Phase::Running)),
     )
     .add_systems(
         Update,
@@ -172,7 +172,7 @@ pub fn create_app(for_wasm: bool) -> App {
             update_wave_display,
             update_speed_display,
         )
-            .run_if(in_state(GameState::WaveSplash)),
+            .run_if(in_state(Phase::WaveSplash)),
     )
     .add_systems(
         Update,
@@ -186,12 +186,12 @@ pub fn create_app(for_wasm: bool) -> App {
             apply_restart,
             restart_button_feedback,
         )
-            .run_if(in_state(GameState::GameOver)),
+            .run_if(in_state(Phase::GameOver)),
     )
     .add_systems(
-        OnEnter(GameState::WaveSplash),
+        OnEnter(Phase::WaveSplash),
         (on_wave_splash_enter, reset_trix_color, reset_camera),
     )
-    .add_systems(OnEnter(GameState::GameOver), on_game_over_enter);
+    .add_systems(OnEnter(Phase::GameOver), on_game_over_enter);
     app
 }
