@@ -16,8 +16,8 @@ use systems::*;
 // CONSTANTS
 // /////////////////////////////////////////////////////////////
 
-pub const WINDOW_WIDTH: f32 = 400.0;
-pub const WINDOW_HEIGHT: f32 = 600.0;
+pub(crate) const WINDOW_WIDTH: f32 = 400.0;
+pub(crate) const WINDOW_HEIGHT: f32 = 600.0;
 pub(crate) const WINDOW_WIDTH_PX: u32 = 400;
 pub(crate) const WINDOW_HEIGHT_PX: u32 = 600;
 
@@ -80,7 +80,7 @@ pub(crate) const CAMERA_SHAKE_AMPLITUDE: f32 = 6.0;
 // /////////////////////////////////////////////////////////////
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Phase {
+pub(crate) enum Phase {
     #[default]
     Menu,
     Running,
@@ -92,7 +92,7 @@ pub enum Phase {
 // APP BOOTSTRAP
 // /////////////////////////////////////////////////////////////
 
-pub fn create_app(for_wasm: bool) -> App {
+pub(crate) fn create_app(for_wasm: bool) -> App {
     let window = if for_wasm {
         Window {
             title: "Trix Blasting".into(),
