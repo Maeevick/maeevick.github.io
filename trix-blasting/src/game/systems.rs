@@ -1,4 +1,4 @@
-use super::Phase;
+use super::GameState;
 use super::*;
 use bevy::{
     asset::RenderAssetUsages,
@@ -6,6 +6,54 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 use rand::RngExt;
+
+// /////////////////////////////////////////////////////////////
+// CONSTANTS
+// /////////////////////////////////////////////////////////////
+
+const TRIX_RENDERED_SIZE: f32 = 30.0;
+const TRIX_COLOR: Color = Color::linear_rgb(0.0, 0.63, 0.87);
+const BASELINE_Y: f32 = -GameWindow::HEIGHT / 2.0 + 40.0;
+const TRIX_Y: f32 = BASELINE_Y + TRIX_RENDERED_SIZE / 2.0 + 5.0;
+const TRIX_BASE_SPEED: f32 = 150.0;
+
+const WALL_MARGIN: f32 = 5.0;
+
+const PLAYER_BULLET_WIDTH: f32 = 4.0;
+const PLAYER_BULLET_HEIGHT: f32 = 12.0;
+const PLAYER_BULLET_BASE_SPEED: f32 = 200.0;
+const PLAYER_SHOOT_COOLDOWN_SECS: f32 = 0.25;
+
+const ALIEN_BULLET_WIDTH: f32 = 4.0;
+const ALIEN_BULLET_HEIGHT: f32 = 10.0;
+const ALIEN_BULLET_BASE_SPEED: f32 = 150.0;
+const ALIEN_SHOOT_INTERVAL_MIN: f32 = 1.5;
+const ALIEN_SHOOT_INTERVAL_MAX: f32 = 3.0;
+const ALIEN_SHOOTER_PROBABILITY: f32 = 0.3;
+
+const ALIEN_FADE_DURATION_SECS: f32 = 0.3;
+
+const MACHINEGUNNER_PROBABILITY: f32 = 0.12;
+const MACHINEGUNNER_BURST_MIN: u8 = 3;
+const MACHINEGUNNER_BURST_MAX: u8 = 8;
+const MACHINEGUNNER_IDLE_MIN: f32 = 2.0;
+const MACHINEGUNNER_IDLE_MAX: f32 = 5.0;
+
+const SHIELDED_PROBABILITY: f32 = 0.10;
+const SHIELDED_HEALTH_MIN: u8 = 2;
+const SHIELDED_HEALTH_MAX: u8 = 5;
+
+const SPEEDSTER_PROBABILITY: f32 = 0.08;
+const SPEEDSTER_MULTIPLIER_MIN: f32 = 1.2;
+const SPEEDSTER_MULTIPLIER_MAX: f32 = 2.0;
+
+const START_BUTTON_COLOR: Color = Color::linear_rgb(0.89, 0.13, 0.74);
+const START_BUTTON_HOVER: Color = Color::linear_rgb(0.71, 0.09, 0.58);
+const RESTART_BUTTON_COLOR: Color = Color::linear_rgb(0.0, 0.63, 0.87);
+const RESTART_BUTTON_HOVER: Color = Color::linear_rgb(0.10, 0.76, 1.0);
+
+const CAMERA_SHAKE_DURATION: f32 = 1.5;
+const CAMERA_SHAKE_AMPLITUDE: f32 = 6.0;
 
 // /////////////////////////////////////////////////////////////
 // DATA
@@ -160,7 +208,7 @@ pub(crate) fn on_startup(mut commands: Commands, mut images: ResMut<Assets<Image
     commands.spawn((
         Sprite {
             color: Color::linear_rgb(0.2, 0.8, 0.2),
-            custom_size: Some(Vec2::new(WINDOW_WIDTH, 3.0)),
+            custom_size: Some(Vec2::new(GameWindow::WIDTH, 3.0)),
             ..default()
         },
         Transform::from_xyz(0.0, BASELINE_Y, 0.0),
@@ -229,7 +277,7 @@ pub(crate) fn on_startup(mut commands: Commands, mut images: ResMut<Assets<Image
         CooldownBar,
     ));
 
-    let hud_y = WINDOW_HEIGHT / 2.0 - 22.0;
+    let hud_y = GameWindow::HEIGHT / 2.0 - 22.0;
     let hud_font = TextFont {
         font_size: 16.0,
         ..default()
@@ -253,7 +301,7 @@ pub(crate) fn on_startup(mut commands: Commands, mut images: ResMut<Assets<Image
     ));
 
     commands.spawn((
-        Text2d::new(format!("SPEED\n{}", BASE_GAME_SPEED as u32)),
+        Text2d::new(format!("SPEED\n{}", Speed::BASE as u32)),
         hud_font,
         hud_color,
         Transform::from_xyz(130.0, hud_y, 5.0),
@@ -277,7 +325,7 @@ pub(crate) fn spawn_alien_wave(
     let mut rng = rand::rng();
 
     for row in 0..row_count {
-        for col in 0..ALIEN_COLS {
+        for col in 0..Alien::COLS {
             let x = alien_col_x(col, swarm.center_x);
             let y = alien_row_y(row, swarm.center_y);
             let color_bytes = pick_rainbow_color(&mut rng);
@@ -351,7 +399,7 @@ pub(crate) fn spawn_alien_wave(
                 Sprite {
                     image: image_handle,
                     color: tint,
-                    custom_size: Some(Vec2::splat(ALIEN_RENDERED_SIZE)),
+                    custom_size: Some(Vec2::splat(Alien::SIZE)),
                     ..default()
                 },
                 Transform::from_xyz(x, y, 1.0),
@@ -494,11 +542,11 @@ pub(crate) fn on_menu_exit(
 pub(crate) fn handle_menu_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     start_btn: Query<&Interaction, (Changed<Interaction>, With<StartButton>)>,
-    mut next_state: ResMut<NextState<Phase>>,
+    mut next_state: ResMut<NextState<GameState>>,
 ) {
     let button_clicked = start_btn.iter().any(|i| *i == Interaction::Pressed);
     if button_clicked || keyboard.just_pressed(KeyCode::Enter) {
-        next_state.set(Phase::WaveSplash);
+        next_state.set(GameState::WaveSplash);
     }
 }
 
@@ -525,7 +573,7 @@ pub(crate) fn on_wave_splash_enter(
     all_ephemeral: WaveTransitionEntities,
     mut images: ResMut<Assets<Image>>,
 ) {
-    splash_timer.0 = Timer::from_seconds(WAVE_SPLASH_DURATION_SECS, TimerMode::Once);
+    *splash_timer = WaveSplashTimer::new();
     *swarm = Swarm::new();
 
     let to_despawn: Vec<Entity> = all_ephemeral.iter().collect();
@@ -534,7 +582,7 @@ pub(crate) fn on_wave_splash_enter(
     }
 
     let row_count = rows_for_wave(wave.number);
-    wave.spawn_count = row_count * ALIEN_COLS;
+    wave.spawn_count = row_count * Alien::COLS;
     spawn_alien_wave(&mut commands, &mut images, &swarm, row_count, true);
 
     commands.spawn((
@@ -553,7 +601,7 @@ pub(crate) fn tick_wave_splash(
     mut commands: Commands,
     time: Res<Time>,
     mut timer: ResMut<WaveSplashTimer>,
-    mut next_state: ResMut<NextState<Phase>>,
+    mut next_state: ResMut<NextState<GameState>>,
     splash_query: Query<Entity, With<SplashText>>,
 ) {
     timer.0.tick(time.delta());
@@ -561,7 +609,7 @@ pub(crate) fn tick_wave_splash(
         for entity in splash_query.iter() {
             commands.entity(entity).despawn();
         }
-        next_state.set(Phase::Running);
+        next_state.set(GameState::Running);
     }
 }
 
@@ -570,14 +618,14 @@ pub(crate) fn check_wave_cleared(
     mut speed: ResMut<Speed>,
     mut wave: ResMut<Wave>,
     mut score: ResMut<Score>,
-    mut next_state: ResMut<NextState<Phase>>,
+    mut next_state: ResMut<NextState<GameState>>,
 ) {
     if aliens.is_empty() {
         let bonus = wave.spawn_count;
         speed.current = speed_after_wave(speed.current, bonus);
         score.value += bonus as u32;
         wave.number += 1;
-        next_state.set(Phase::WaveSplash);
+        next_state.set(GameState::WaveSplash);
     }
 }
 
@@ -621,10 +669,10 @@ pub(crate) fn move_trix(
         direction += 1.0;
     }
 
-    let trix_wx = trix_transform.translation.x + WINDOW_WIDTH / 2.0;
+    let trix_wx = trix_transform.translation.x + GameWindow::WIDTH / 2.0;
     for touch in touches.iter() {
         let pos = touch.position();
-        if pos.y > WINDOW_HEIGHT - 40.0 {
+        if pos.y > GameWindow::HEIGHT - 40.0 {
             if pos.x < trix_wx {
                 direction -= 1.0;
             } else if pos.x > trix_wx {
@@ -640,8 +688,8 @@ pub(crate) fn move_trix(
     }
 
     let trix_speed = TRIX_BASE_SPEED + speed.current;
-    let left_boundary = -WINDOW_WIDTH / 2.0 + TRIX_RENDERED_SIZE / 2.0;
-    let right_boundary = WINDOW_WIDTH / 2.0 - TRIX_RENDERED_SIZE / 2.0;
+    let left_boundary = -GameWindow::WIDTH / 2.0 + TRIX_RENDERED_SIZE / 2.0;
+    let right_boundary = GameWindow::WIDTH / 2.0 - TRIX_RENDERED_SIZE / 2.0;
 
     trix_transform.translation.x = (trix_transform.translation.x
         + direction * trix_speed * time.delta_secs())
@@ -703,7 +751,7 @@ pub(crate) fn move_player_bullets(
     for (entity, mut transform) in bullets.iter_mut() {
         transform.translation.y += bullet_speed * time.delta_secs();
 
-        if transform.translation.y > WINDOW_HEIGHT / 2.0 + PLAYER_BULLET_HEIGHT {
+        if transform.translation.y > GameWindow::HEIGHT / 2.0 + PLAYER_BULLET_HEIGHT {
             commands.entity(entity).despawn();
             speed.current = speed_after_miss(speed.current);
             println!("Miss! Speed: {:.1}", speed.current);
@@ -740,7 +788,7 @@ pub(crate) fn move_swarm(
     boost: Res<SpeedsterBoost>,
     mut alien_query: Query<(&Alien, &mut Transform)>,
 ) {
-    let mut leftmost_col = ALIEN_COLS;
+    let mut leftmost_col = Alien::COLS;
     let mut rightmost_col = 0usize;
     let mut has_aliens = false;
 
@@ -756,16 +804,16 @@ pub(crate) fn move_swarm(
 
     let rightmost_x = alien_col_x(rightmost_col, swarm.center_x);
     let leftmost_x = alien_col_x(leftmost_col, swarm.center_x);
-    let half = ALIEN_RENDERED_SIZE / 2.0;
-    let right_wall = WINDOW_WIDTH / 2.0 - WALL_MARGIN;
-    let left_wall = -WINDOW_WIDTH / 2.0 + WALL_MARGIN;
+    let half = Alien::SIZE / 2.0;
+    let right_wall = GameWindow::WIDTH / 2.0 - WALL_MARGIN;
+    let left_wall = -GameWindow::WIDTH / 2.0 + WALL_MARGIN;
 
     if swarm.direction > 0.0 && rightmost_x + half >= right_wall {
         swarm.direction = -1.0;
-        swarm.center_y -= ALIEN_DROP_DISTANCE;
+        swarm.center_y -= Alien::DROP;
     } else if swarm.direction < 0.0 && leftmost_x - half <= left_wall {
         swarm.direction = 1.0;
-        swarm.center_y -= ALIEN_DROP_DISTANCE;
+        swarm.center_y -= Alien::DROP;
     }
 
     swarm.center_x += swarm.direction * speed.current * boost.multiplier * time.delta_secs();
@@ -792,7 +840,7 @@ pub(crate) fn handle_alien_shooting(
                 },
                 Transform::from_xyz(
                     transform.translation.x,
-                    transform.translation.y - ALIEN_RENDERED_SIZE / 2.0 - ALIEN_BULLET_HEIGHT / 2.0,
+                    transform.translation.y - Alien::SIZE / 2.0 - ALIEN_BULLET_HEIGHT / 2.0,
                     2.0,
                 ),
                 AlienBullet,
@@ -828,9 +876,7 @@ pub(crate) fn handle_machinegunner_shooting(
                     },
                     Transform::from_xyz(
                         transform.translation.x,
-                        transform.translation.y
-                            - ALIEN_RENDERED_SIZE / 2.0
-                            - ALIEN_BULLET_HEIGHT / 2.0,
+                        transform.translation.y - Alien::SIZE / 2.0 - ALIEN_BULLET_HEIGHT / 2.0,
                         2.0,
                     ),
                     AlienBullet,
@@ -920,7 +966,7 @@ pub(crate) fn check_bullet_alien_collisions(
     mut score: ResMut<Score>,
 ) {
     let half_bullet = Vec2::new(PLAYER_BULLET_WIDTH / 2.0, PLAYER_BULLET_HEIGHT / 2.0);
-    let half_alien = Vec2::splat(ALIEN_RENDERED_SIZE / 2.0);
+    let half_alien = Vec2::splat(Alien::SIZE / 2.0);
 
     let mut used_bullets = std::collections::HashSet::new();
     let mut used_aliens = std::collections::HashSet::new();
@@ -976,7 +1022,7 @@ pub(crate) fn check_game_over_conditions(
     aliens: Query<&Transform, With<Alien>>,
     alien_bullets: Query<(Entity, &Transform, &Sprite), With<AlienBullet>>,
     trix_query: Query<&Transform, With<Trix>>,
-    mut next_state: ResMut<NextState<Phase>>,
+    mut next_state: ResMut<NextState<GameState>>,
 ) {
     let Ok(trix_transform) = trix_query.single() else {
         return;
@@ -984,7 +1030,7 @@ pub(crate) fn check_game_over_conditions(
 
     let trix_pos = trix_transform.translation.truncate();
     let half_trix_shrunk = Vec2::splat(TRIX_RENDERED_SIZE / 2.0 - 1.0);
-    let half_alien = Vec2::splat(ALIEN_RENDERED_SIZE / 2.0);
+    let half_alien = Vec2::splat(Alien::SIZE / 2.0);
     let half_bullet = Vec2::new(ALIEN_BULLET_WIDTH / 2.0, ALIEN_BULLET_HEIGHT / 2.0);
 
     for (bullet_entity, bullet_transform, bullet_sprite) in alien_bullets.iter() {
@@ -992,7 +1038,7 @@ pub(crate) fn check_game_over_conditions(
         if aabb_overlaps(trix_pos, half_trix_shrunk, bullet_pos, half_bullet) {
             spawn_explosion(&mut commands, bullet_pos, bullet_sprite.color);
             commands.entity(bullet_entity).despawn();
-            next_state.set(Phase::GameOver);
+            next_state.set(GameState::GameOver);
             return;
         }
     }
@@ -1000,11 +1046,11 @@ pub(crate) fn check_game_over_conditions(
     for alien_transform in aliens.iter() {
         let alien_pos = alien_transform.translation.truncate();
         if aabb_overlaps(alien_pos, half_alien, trix_pos, half_trix_shrunk) {
-            next_state.set(Phase::GameOver);
+            next_state.set(GameState::GameOver);
             return;
         }
-        if alien_transform.translation.y - ALIEN_RENDERED_SIZE / 2.0 <= BASELINE_Y {
-            next_state.set(Phase::GameOver);
+        if alien_transform.translation.y - Alien::SIZE / 2.0 <= BASELINE_Y {
+            next_state.set(GameState::GameOver);
             return;
         }
     }
@@ -1254,19 +1300,19 @@ pub(crate) fn apply_restart(
     mut cooldown: ResMut<PlayerShootCooldown>,
     mut score: ResMut<Score>,
     mut boost: ResMut<SpeedsterBoost>,
-    mut next_state: ResMut<NextState<Phase>>,
+    mut next_state: ResMut<NextState<GameState>>,
 ) {
     if !pending.0 {
         return;
     }
     pending.0 = false;
-    speed.current = BASE_GAME_SPEED;
+    speed.current = Speed::BASE;
     wave.number = 1;
-    wave.spawn_count = ALIEN_COLS;
+    wave.spawn_count = Alien::COLS;
     cooldown.0 = 0.0;
     score.value = 0;
     boost.multiplier = 1.0;
-    next_state.set(Phase::WaveSplash);
+    next_state.set(GameState::WaveSplash);
 }
 
 pub(crate) fn restart_button_feedback(

@@ -24,6 +24,13 @@ pub(crate) struct Alien {
     pub(crate) color: Color,
 }
 
+impl Alien {
+    pub(crate) const COLS: usize = 10;
+    pub(crate) const SIZE: f32 = 25.0;
+    pub(crate) const GAP: f32 = 5.0;
+    pub(crate) const DROP: f32 = Self::SIZE + Self::GAP;
+}
+
 #[derive(Component)]
 pub(crate) struct AlienBullet;
 

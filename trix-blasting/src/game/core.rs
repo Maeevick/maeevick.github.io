@@ -2,18 +2,24 @@ use super::*;
 use bevy::math::Vec2;
 
 // /////////////////////////////////////////////////////////////
+// CONSTANTS
+// /////////////////////////////////////////////////////////////
+
+const SPEED_PER_HIT: f32 = -1.0;
+const SPEED_PER_PLAYER_MISS: f32 = 1.0;
+
+// /////////////////////////////////////////////////////////////
 // POSITIONS
 // /////////////////////////////////////////////////////////////
 
 pub fn alien_col_x(col: usize, swarm_center_x: f32) -> f32 {
-    let total_grid_width =
-        ALIEN_COLS as f32 * ALIEN_RENDERED_SIZE + (ALIEN_COLS - 1) as f32 * ALIEN_GAP;
-    swarm_center_x + col as f32 * (ALIEN_RENDERED_SIZE + ALIEN_GAP) - total_grid_width / 2.0
-        + ALIEN_RENDERED_SIZE / 2.0
+    let total_grid_width = Alien::COLS as f32 * Alien::SIZE + (Alien::COLS - 1) as f32 * Alien::GAP;
+    swarm_center_x + col as f32 * (Alien::SIZE + Alien::GAP) - total_grid_width / 2.0
+        + Alien::SIZE / 2.0
 }
 
 pub fn alien_row_y(row: usize, swarm_center_y: f32) -> f32 {
-    swarm_center_y - row as f32 * ALIEN_DROP_DISTANCE
+    swarm_center_y - row as f32 * Alien::DROP
 }
 
 // /////////////////////////////////////////////////////////////
@@ -21,7 +27,7 @@ pub fn alien_row_y(row: usize, swarm_center_y: f32) -> f32 {
 // /////////////////////////////////////////////////////////////
 
 pub fn speed_after_hit(current: f32) -> f32 {
-    (current + SPEED_PER_HIT).max(BASE_GAME_SPEED)
+    (current + SPEED_PER_HIT).max(Speed::BASE)
 }
 
 pub fn speed_after_miss(current: f32) -> f32 {
@@ -33,7 +39,7 @@ pub fn speed_after_wave(current: f32, alien_count: usize) -> f32 {
 }
 
 pub fn burst_delay_secs(current_speed: f32) -> f32 {
-    0.1 * (BASE_GAME_SPEED / current_speed)
+    0.1 * (Speed::BASE / current_speed)
 }
 
 // /////////////////////////////////////////////////////////////
@@ -104,16 +110,15 @@ mod tests {
     #[test]
     fn given_column_zero_when_computing_alien_x_then_aligns_with_left_grid_edge() {
         let x = alien_col_x(0, 0.0);
-        let total_width =
-            ALIEN_COLS as f32 * ALIEN_RENDERED_SIZE + (ALIEN_COLS - 1) as f32 * ALIEN_GAP;
-        let expected = -total_width / 2.0 + ALIEN_RENDERED_SIZE / 2.0;
+        let total_width = Alien::COLS as f32 * Alien::SIZE + (Alien::COLS - 1) as f32 * Alien::GAP;
+        let expected = -total_width / 2.0 + Alien::SIZE / 2.0;
         assert!((x - expected).abs() < 0.01, "got {x}, expected {expected}");
     }
 
     #[test]
     fn given_last_column_when_computing_alien_x_then_mirrors_first_column() {
         let x_first = alien_col_x(0, 0.0);
-        let x_last = alien_col_x(ALIEN_COLS - 1, 0.0);
+        let x_last = alien_col_x(Alien::COLS - 1, 0.0);
         assert!(
             (x_first + x_last).abs() < 0.01,
             "expected symmetry: {x_first} + {x_last} ≈ 0"
@@ -137,8 +142,8 @@ mod tests {
 
     #[test]
     fn given_base_speed_when_player_misses_then_speed_increases_by_penalty() {
-        let result = speed_after_miss(BASE_GAME_SPEED);
-        assert!((result - (BASE_GAME_SPEED + SPEED_PER_PLAYER_MISS)).abs() < 0.01);
+        let result = speed_after_miss(Speed::BASE);
+        assert!((result - (Speed::BASE + SPEED_PER_PLAYER_MISS)).abs() < 0.01);
     }
 
     #[test]
@@ -149,8 +154,8 @@ mod tests {
 
     #[test]
     fn given_base_speed_when_bullet_hits_alien_then_speed_stays_at_floor() {
-        let result = speed_after_hit(BASE_GAME_SPEED);
-        assert!((result - BASE_GAME_SPEED).abs() < 0.01);
+        let result = speed_after_hit(Speed::BASE);
+        assert!((result - Speed::BASE).abs() < 0.01);
     }
 
     #[test]
@@ -162,8 +167,8 @@ mod tests {
     #[test]
     fn given_base_speed_when_wave_clears_then_speed_increases_by_alien_count() {
         let alien_count = 10usize;
-        let result = speed_after_wave(BASE_GAME_SPEED, alien_count);
-        assert!((result - (BASE_GAME_SPEED + alien_count as f32)).abs() < 0.01);
+        let result = speed_after_wave(Speed::BASE, alien_count);
+        assert!((result - (Speed::BASE + alien_count as f32)).abs() < 0.01);
     }
 
     #[test]
@@ -245,13 +250,13 @@ mod tests {
 
     #[test]
     fn given_base_speed_when_computing_burst_delay_then_equals_0_1() {
-        let delay = burst_delay_secs(BASE_GAME_SPEED);
+        let delay = burst_delay_secs(Speed::BASE);
         assert!((delay - 0.1).abs() < 0.001);
     }
 
     #[test]
     fn given_double_speed_when_computing_burst_delay_then_delay_halves() {
-        let delay = burst_delay_secs(BASE_GAME_SPEED * 2.0);
+        let delay = burst_delay_secs(Speed::BASE * 2.0);
         assert!((delay - 0.05).abs() < 0.001);
     }
 }

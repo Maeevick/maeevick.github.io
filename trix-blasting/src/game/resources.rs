@@ -1,5 +1,11 @@
-use super::{BASE_GAME_SPEED, SWARM_START_Y};
+use super::GameWindow;
 use bevy::prelude::*;
+
+// /////////////////////////////////////////////////////////////
+// CONSTANTS
+// /////////////////////////////////////////////////////////////
+
+const SWARM_START_Y: f32 = GameWindow::HEIGHT / 2.0 - 60.0;
 
 // /////////////////////////////////////////////////////////////
 // GAME MECHANICS
@@ -16,9 +22,11 @@ pub(crate) struct Speed {
 }
 
 impl Speed {
+    pub(crate) const BASE: f32 = 50.0;
+
     pub(crate) fn new() -> Self {
         Self {
-            current: BASE_GAME_SPEED,
+            current: Self::BASE,
         }
     }
 }
@@ -77,6 +85,14 @@ pub(crate) struct RestartPending(pub(crate) bool);
 
 #[derive(Resource)]
 pub(crate) struct WaveSplashTimer(pub(crate) Timer);
+
+impl WaveSplashTimer {
+    const DURATION: f32 = 1.5;
+
+    pub(crate) fn new() -> Self {
+        Self(Timer::from_seconds(Self::DURATION, TimerMode::Once))
+    }
+}
 
 #[derive(Resource)]
 pub(crate) struct CameraShake {
