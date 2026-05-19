@@ -623,7 +623,7 @@ pub(crate) fn check_wave_cleared(
     if aliens.is_empty() {
         let bonus = wave.spawn_count;
         speed.current = speed_after_wave(speed.current, bonus);
-        score.value += bonus as u32;
+        score.value = score_wave_bonus(score.value, bonus);
         wave.number += 1;
         next_state.set(GameState::WaveSplash);
     }
@@ -1001,7 +1001,7 @@ pub(crate) fn check_bullet_alien_collisions(
 
     for (bullet_entity, alien_entity, alien_pos, bullet_color) in &hit_pairs {
         commands.entity(*bullet_entity).despawn();
-        score.value += 1;
+        score.value = score_a_kill_point(score.value);
         speed.current = speed_after_hit(speed.current);
         if let Ok(mut s) = shielded.get_mut(*alien_entity) {
             if s.health > 1 {
@@ -1310,7 +1310,7 @@ pub(crate) fn apply_restart(
     wave.number = 1;
     wave.spawn_count = Alien::COLS;
     cooldown.0 = 0.0;
-    score.value = 0;
+    *score = Score::default();
     boost.multiplier = 1.0;
     next_state.set(GameState::WaveSplash);
 }

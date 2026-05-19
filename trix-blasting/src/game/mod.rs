@@ -6,6 +6,9 @@ use components::*;
 mod resources;
 use resources::*;
 
+mod score;
+use score::*;
+
 mod core;
 use core::*;
 

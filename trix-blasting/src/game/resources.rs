@@ -11,11 +11,6 @@ const SWARM_START_Y: f32 = GameWindow::HEIGHT / 2.0 - 60.0;
 // GAME MECHANICS
 // /////////////////////////////////////////////////////////////
 
-#[derive(Resource, Default)]
-pub(crate) struct Score {
-    pub(crate) value: u32,
-}
-
 #[derive(Resource)]
 pub(crate) struct Speed {
     pub(crate) current: f32,
