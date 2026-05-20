@@ -12,21 +12,22 @@ use score::*;
 mod speed;
 use speed::*;
 
+mod trix;
+use trix::*;
+
 mod core;
 use core::*;
 
 mod systems;
 use systems::*;
 
-// /////////////////////////////////////////////////////////////
-// GAME WINDOW
-// /////////////////////////////////////////////////////////////
-
 pub(crate) struct GameWindow;
 
 impl GameWindow {
     pub(crate) const WIDTH: f32 = 400.0;
     pub(crate) const HEIGHT: f32 = 600.0;
+    pub(crate) const BASELINE_Y: f32 = -Self::HEIGHT / 2.0 + 40.0;
+    pub(crate) const WALL_MARGIN: f32 = 5.0;
 }
 
 // /////////////////////////////////////////////////////////////
@@ -71,7 +72,7 @@ pub(crate) fn create_app(for_wasm: bool) -> App {
     .insert_resource(ClearColor(Color::linear_rgb(0.05, 0.05, 0.1)))
     .insert_resource(Speed::new())
     .insert_resource(Swarm::new())
-    .insert_resource(PlayerShootCooldown(0.0))
+    .insert_resource(TrixShootCooldown(0.0))
     .insert_resource(Wave {
         number: 1,
         spawn_count: Alien::COLS,
@@ -92,10 +93,10 @@ pub(crate) fn create_app(for_wasm: bool) -> App {
     .add_systems(
         Update,
         (
-            move_trix,
+            handle_trix_movement,
             handle_trix_shooting,
-            move_player_bullets,
-            update_cooldown_bar,
+            move_trix_bullets,
+            update_reload_bar,
             move_swarm,
             handle_alien_shooting,
             handle_machinegunner_shooting,

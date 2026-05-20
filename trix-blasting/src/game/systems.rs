@@ -11,19 +11,6 @@ use rand::RngExt;
 // CONSTANTS
 // /////////////////////////////////////////////////////////////
 
-const TRIX_RENDERED_SIZE: f32 = 30.0;
-const TRIX_COLOR: Color = Color::linear_rgb(0.0, 0.63, 0.87);
-const BASELINE_Y: f32 = -GameWindow::HEIGHT / 2.0 + 40.0;
-const TRIX_Y: f32 = BASELINE_Y + TRIX_RENDERED_SIZE / 2.0 + 5.0;
-const TRIX_BASE_SPEED: f32 = 150.0;
-
-const WALL_MARGIN: f32 = 5.0;
-
-const PLAYER_BULLET_WIDTH: f32 = 4.0;
-const PLAYER_BULLET_HEIGHT: f32 = 12.0;
-const PLAYER_BULLET_BASE_SPEED: f32 = 200.0;
-const PLAYER_SHOOT_COOLDOWN_SECS: f32 = 0.25;
-
 const ALIEN_BULLET_WIDTH: f32 = 4.0;
 const ALIEN_BULLET_HEIGHT: f32 = 10.0;
 const ALIEN_BULLET_BASE_SPEED: f32 = 150.0;
@@ -91,19 +78,15 @@ pub(crate) const ALIEN_SHAPES: [[bool; 25]; 5] = [
 // TYPE ALIASES
 // /////////////////////////////////////////////////////////////
 
-pub(crate) type CooldownBarQuery<'w, 's> = Query<
-    'w,
-    's,
-    (&'static mut Transform, &'static mut Sprite),
-    (With<CooldownBar>, Without<Trix>),
->;
+pub(crate) type ReloadBarQuery<'w, 's> =
+    Query<'w, 's, (&'static mut Transform, &'static mut Sprite), (With<ReloadBar>, Without<Trix>)>;
 
 pub(crate) type WaveTransitionEntities<'w, 's> = Query<
     'w,
     's,
     Entity,
     Or<(
-        With<PlayerBullet>,
+        With<TrixBullet>,
         With<AlienBullet>,
         With<BulletSplash>,
         With<ExplosionParticle>,
@@ -211,28 +194,10 @@ pub(crate) fn on_startup(mut commands: Commands, mut images: ResMut<Assets<Image
             custom_size: Some(Vec2::new(GameWindow::WIDTH, 3.0)),
             ..default()
         },
-        Transform::from_xyz(0.0, BASELINE_Y, 0.0),
+        Transform::from_xyz(0.0, GameWindow::BASELINE_Y, 0.0),
     ));
 
-    #[rustfmt::skip]
-    let ship: [bool; 225] = [
-        false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,
-        false,false,false,false,false,false,true, true, true,false,false,false,false,false,false,
-        false,false,false,false,false,true,true , true, true,true ,false,false,false,false,false,
-        false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,
-        false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,
-        false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,
-        true ,false,false,false,false,false,true, true, true,false,false,false,false,false, true,
-        true ,false,false,false,false,true, true, true, true,true,false,false,false,false, true,
-        true, true ,true ,true ,true, true, true, true, true, true, true, true, true, true, true,
-        true, true ,true ,true ,true, true, true, true, true, true, true, true, true, true, true,
-        true ,false,false,false,false,false,false,true,false,false,false,false,false,false, true,
-        false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,
-        false,false,false,false,false,false,true, true, true,false,false,false,false,false,false,
-        false,false,false,false,false,true ,true, true, true,true ,false,false,false,false,false,
-        false,false,false,false,false,false,true,false, true,false,false,false,false,false,false,
-    ];
-    let ship_data: Vec<u8> = ship
+    let ship_data: Vec<u8> = SHIP_SHAPE
         .iter()
         .flat_map(|&f| {
             if f {
@@ -274,7 +239,7 @@ pub(crate) fn on_startup(mut commands: Commands, mut images: ResMut<Assets<Image
             ..default()
         },
         Transform::from_xyz(0.0, TRIX_Y - TRIX_RENDERED_SIZE / 2.0 - 5.0, 2.0),
-        CooldownBar,
+        ReloadBar,
     ));
 
     let hud_y = GameWindow::HEIGHT / 2.0 - 22.0;
@@ -646,7 +611,7 @@ pub(crate) fn reset_camera(mut camera: Query<&mut Transform, With<Camera2d>>) {
 // PLAYER
 // /////////////////////////////////////////////////////////////
 
-pub(crate) fn move_trix(
+pub(crate) fn handle_trix_movement(
     keyboard: Res<ButtonInput<KeyCode>>,
     touches: Res<Touches>,
     mut trix_query: Query<&mut Transform, With<Trix>>,
@@ -688,12 +653,12 @@ pub(crate) fn move_trix(
     }
 
     let trix_speed = TRIX_BASE_SPEED + speed.current;
-    let left_boundary = -GameWindow::WIDTH / 2.0 + TRIX_RENDERED_SIZE / 2.0;
-    let right_boundary = GameWindow::WIDTH / 2.0 - TRIX_RENDERED_SIZE / 2.0;
-
-    trix_transform.translation.x = (trix_transform.translation.x
-        + direction * trix_speed * time.delta_secs())
-    .clamp(left_boundary, right_boundary);
+    trix_transform.translation.x = move_trix(
+        trix_transform.translation.x,
+        direction,
+        trix_speed,
+        time.delta_secs(),
+    );
 }
 
 pub(crate) fn handle_trix_shooting(
@@ -702,10 +667,10 @@ pub(crate) fn handle_trix_shooting(
     touches: Res<Touches>,
     mut commands: Commands,
     trix_query: Query<&Transform, With<Trix>>,
-    mut cooldown: ResMut<PlayerShootCooldown>,
+    mut cooldown: ResMut<TrixShootCooldown>,
     time: Res<Time>,
 ) {
-    cooldown.0 = (cooldown.0 - time.delta_secs()).max(0.0);
+    cooldown.0 = tick_reload(cooldown.0, time.delta_secs());
     if cooldown.0 > 0.0 {
         return;
     }
@@ -727,31 +692,31 @@ pub(crate) fn handle_trix_shooting(
     commands.spawn((
         Sprite {
             color: Color::WHITE,
-            custom_size: Some(Vec2::new(PLAYER_BULLET_WIDTH, PLAYER_BULLET_HEIGHT)),
+            custom_size: Some(Vec2::new(TRIX_BULLET_WIDTH, TRIX_BULLET_HEIGHT)),
             ..default()
         },
         Transform::from_xyz(
             trix_transform.translation.x,
-            trix_transform.translation.y + TRIX_RENDERED_SIZE / 2.0 + PLAYER_BULLET_HEIGHT / 2.0,
+            trix_transform.translation.y + TRIX_RENDERED_SIZE / 2.0 + TRIX_BULLET_HEIGHT / 2.0,
             2.0,
         ),
-        PlayerBullet,
+        TrixBullet,
     ));
-    cooldown.0 = PLAYER_SHOOT_COOLDOWN_SECS;
+    cooldown.0 = TRIX_SHOOT_COOLDOWN;
 }
 
-pub(crate) fn move_player_bullets(
+pub(crate) fn move_trix_bullets(
     mut commands: Commands,
-    mut bullets: Query<(Entity, &mut Transform), With<PlayerBullet>>,
+    mut bullets: Query<(Entity, &mut Transform), With<TrixBullet>>,
     mut speed: ResMut<Speed>,
     time: Res<Time>,
 ) {
-    let bullet_speed = PLAYER_BULLET_BASE_SPEED + speed.current;
+    let bullet_speed = TRIX_BULLET_SPEED + speed.current;
 
     for (entity, mut transform) in bullets.iter_mut() {
         transform.translation.y += bullet_speed * time.delta_secs();
 
-        if transform.translation.y > GameWindow::HEIGHT / 2.0 + PLAYER_BULLET_HEIGHT {
+        if transform.translation.y > GameWindow::HEIGHT / 2.0 + TRIX_BULLET_HEIGHT {
             commands.entity(entity).despawn();
             speed.current = accelerate_on_miss(speed.current);
             println!("Miss! Speed: {:.1}", speed.current);
@@ -759,13 +724,12 @@ pub(crate) fn move_player_bullets(
     }
 }
 
-pub(crate) fn update_cooldown_bar(
-    cooldown: Res<PlayerShootCooldown>,
+pub(crate) fn update_reload_bar(
+    cooldown: Res<TrixShootCooldown>,
     trix_query: Query<&Transform, With<Trix>>,
-    mut bar_query: CooldownBarQuery,
+    mut bar_query: ReloadBarQuery,
 ) {
-    let fraction_ready = 1.0 - (cooldown.0 / PLAYER_SHOOT_COOLDOWN_SECS).clamp(0.0, 1.0);
-    let bar_width = TRIX_RENDERED_SIZE * fraction_ready;
+    let bar_width = compute_reload_bar_width(cooldown.0);
 
     for trix_transform in trix_query.iter() {
         for (mut bar_transform, mut sprite) in bar_query.iter_mut() {
@@ -805,8 +769,8 @@ pub(crate) fn move_swarm(
     let rightmost_x = alien_col_x(rightmost_col, swarm.center_x);
     let leftmost_x = alien_col_x(leftmost_col, swarm.center_x);
     let half = Alien::SIZE / 2.0;
-    let right_wall = GameWindow::WIDTH / 2.0 - WALL_MARGIN;
-    let left_wall = -GameWindow::WIDTH / 2.0 + WALL_MARGIN;
+    let right_wall = GameWindow::WIDTH / 2.0 - GameWindow::WALL_MARGIN;
+    let left_wall = -GameWindow::WIDTH / 2.0 + GameWindow::WALL_MARGIN;
 
     if swarm.direction > 0.0 && rightmost_x + half >= right_wall {
         swarm.direction = -1.0;
@@ -939,8 +903,8 @@ pub(crate) fn move_alien_bullets(
     for (entity, mut transform, sprite) in bullets.iter_mut() {
         transform.translation.y -= bullet_speed * time.delta_secs();
 
-        if transform.translation.y <= BASELINE_Y {
-            transform.translation.y = BASELINE_Y;
+        if transform.translation.y <= GameWindow::BASELINE_Y {
+            transform.translation.y = GameWindow::BASELINE_Y;
             let color = sprite.color;
             commands
                 .entity(entity)
@@ -959,13 +923,13 @@ pub(crate) fn move_alien_bullets(
 
 pub(crate) fn check_bullet_alien_collisions(
     mut commands: Commands,
-    bullets: Query<(Entity, &Transform, &Sprite), With<PlayerBullet>>,
+    bullets: Query<(Entity, &Transform, &Sprite), With<TrixBullet>>,
     aliens: Query<(Entity, &Transform), With<Alien>>,
     mut shielded: Query<&mut Shielded>,
     mut speed: ResMut<Speed>,
     mut score: ResMut<Score>,
 ) {
-    let half_bullet = Vec2::new(PLAYER_BULLET_WIDTH / 2.0, PLAYER_BULLET_HEIGHT / 2.0);
+    let half_bullet = Vec2::new(TRIX_BULLET_WIDTH / 2.0, TRIX_BULLET_HEIGHT / 2.0);
     let half_alien = Vec2::splat(Alien::SIZE / 2.0);
 
     let mut used_bullets = std::collections::HashSet::new();
@@ -1049,7 +1013,7 @@ pub(crate) fn check_game_over_conditions(
             next_state.set(GameState::GameOver);
             return;
         }
-        if alien_transform.translation.y - Alien::SIZE / 2.0 <= BASELINE_Y {
+        if alien_transform.translation.y - Alien::SIZE / 2.0 <= GameWindow::BASELINE_Y {
             next_state.set(GameState::GameOver);
             return;
         }
@@ -1168,15 +1132,7 @@ pub(crate) fn on_game_over_enter(
     if let Ok((trix_transform, mut trix_sprite)) = trix_query.single_mut() {
         trix_sprite.color = Color::linear_rgb(0.9, 0.1, 0.1);
 
-        #[rustfmt::skip]
-        let skull: [bool; 25] = [
-            false, true,  true,  true,  false,
-            true,  false, true,  false, true,
-            true,  true,  true,  true,  true,
-            false, true,  false, true,  false,
-            false, false, true,  false, false,
-        ];
-        let data: Vec<u8> = skull
+        let data: Vec<u8> = DESTROYED_SHIP_SHAPE
             .iter()
             .flat_map(|&f| {
                 if f {
@@ -1297,7 +1253,7 @@ pub(crate) fn apply_restart(
     mut pending: ResMut<RestartPending>,
     mut speed: ResMut<Speed>,
     mut wave: ResMut<Wave>,
-    mut cooldown: ResMut<PlayerShootCooldown>,
+    mut cooldown: ResMut<TrixShootCooldown>,
     mut score: ResMut<Score>,
     mut boost: ResMut<SpeedsterBoost>,
     mut next_state: ResMut<NextState<GameState>>,

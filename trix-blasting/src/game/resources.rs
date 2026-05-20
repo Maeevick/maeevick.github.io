@@ -50,11 +50,8 @@ impl Swarm {
 }
 
 // /////////////////////////////////////////////////////////////
-// PLAYER STATE
+// RESTART
 // /////////////////////////////////////////////////////////////
-
-#[derive(Resource)]
-pub(crate) struct PlayerShootCooldown(pub(crate) f32);
 
 #[derive(Resource, Default)]
 pub(crate) struct RestartPending(pub(crate) bool);
