@@ -98,7 +98,4 @@ pub(crate) struct RestartButton;
 pub(crate) struct WaveDisplay;
 
 #[derive(Component)]
-pub(crate) struct SpeedDisplay;
-
-#[derive(Component)]
 pub(crate) struct SplashText;

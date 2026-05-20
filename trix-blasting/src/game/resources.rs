@@ -12,21 +12,6 @@ const SWARM_START_Y: f32 = GameWindow::HEIGHT / 2.0 - 60.0;
 // /////////////////////////////////////////////////////////////
 
 #[derive(Resource)]
-pub(crate) struct Speed {
-    pub(crate) current: f32,
-}
-
-impl Speed {
-    pub(crate) const BASE: f32 = 50.0;
-
-    pub(crate) fn new() -> Self {
-        Self {
-            current: Self::BASE,
-        }
-    }
-}
-
-#[derive(Resource)]
 pub(crate) struct Wave {
     pub(crate) number: u32,
     pub(crate) spawn_count: usize,

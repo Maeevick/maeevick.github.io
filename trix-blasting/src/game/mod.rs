@@ -9,6 +9,9 @@ use resources::*;
 mod score;
 use score::*;
 
+mod speed;
+use speed::*;
+
 mod core;
 use core::*;
 

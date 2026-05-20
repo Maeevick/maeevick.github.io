@@ -622,7 +622,7 @@ pub(crate) fn check_wave_cleared(
 ) {
     if aliens.is_empty() {
         let bonus = wave.spawn_count;
-        speed.current = speed_after_wave(speed.current, bonus);
+        speed.current = accelerate_on_wave(speed.current, bonus);
         score.value = score_wave_bonus(score.value, bonus);
         wave.number += 1;
         next_state.set(GameState::WaveSplash);
@@ -753,7 +753,7 @@ pub(crate) fn move_player_bullets(
 
         if transform.translation.y > GameWindow::HEIGHT / 2.0 + PLAYER_BULLET_HEIGHT {
             commands.entity(entity).despawn();
-            speed.current = speed_after_miss(speed.current);
+            speed.current = accelerate_on_miss(speed.current);
             println!("Miss! Speed: {:.1}", speed.current);
         }
     }
@@ -1002,7 +1002,7 @@ pub(crate) fn check_bullet_alien_collisions(
     for (bullet_entity, alien_entity, alien_pos, bullet_color) in &hit_pairs {
         commands.entity(*bullet_entity).despawn();
         score.value = score_a_kill_point(score.value);
-        speed.current = speed_after_hit(speed.current);
+        speed.current = decelerate_on_kill(speed.current);
         if let Ok(mut s) = shielded.get_mut(*alien_entity) {
             if s.health > 1 {
                 s.health -= 1;

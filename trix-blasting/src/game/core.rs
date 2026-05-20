@@ -2,13 +2,6 @@ use super::*;
 use bevy::math::Vec2;
 
 // /////////////////////////////////////////////////////////////
-// CONSTANTS
-// /////////////////////////////////////////////////////////////
-
-const SPEED_PER_HIT: f32 = -1.0;
-const SPEED_PER_PLAYER_MISS: f32 = 1.0;
-
-// /////////////////////////////////////////////////////////////
 // POSITIONS
 // /////////////////////////////////////////////////////////////
 
@@ -20,26 +13,6 @@ pub fn alien_col_x(col: usize, swarm_center_x: f32) -> f32 {
 
 pub fn alien_row_y(row: usize, swarm_center_y: f32) -> f32 {
     swarm_center_y - row as f32 * Alien::DROP
-}
-
-// /////////////////////////////////////////////////////////////
-// SPEED
-// /////////////////////////////////////////////////////////////
-
-pub fn speed_after_hit(current: f32) -> f32 {
-    (current + SPEED_PER_HIT).max(Speed::BASE)
-}
-
-pub fn speed_after_miss(current: f32) -> f32 {
-    current + SPEED_PER_PLAYER_MISS
-}
-
-pub fn speed_after_wave(current: f32, alien_count: usize) -> f32 {
-    current + alien_count as f32
-}
-
-pub fn burst_delay_secs(current_speed: f32) -> f32 {
-    0.1 * (Speed::BASE / current_speed)
 }
 
 // /////////////////////////////////////////////////////////////
@@ -141,37 +114,6 @@ mod tests {
     }
 
     #[test]
-    fn given_base_speed_when_player_misses_then_speed_increases_by_penalty() {
-        let result = speed_after_miss(Speed::BASE);
-        assert!((result - (Speed::BASE + SPEED_PER_PLAYER_MISS)).abs() < 0.01);
-    }
-
-    #[test]
-    fn given_any_speed_when_player_misses_then_speed_increases_by_fixed_penalty() {
-        let result = speed_after_miss(120.0);
-        assert!((result - (120.0 + SPEED_PER_PLAYER_MISS)).abs() < 0.01);
-    }
-
-    #[test]
-    fn given_base_speed_when_bullet_hits_alien_then_speed_stays_at_floor() {
-        let result = speed_after_hit(Speed::BASE);
-        assert!((result - Speed::BASE).abs() < 0.01);
-    }
-
-    #[test]
-    fn given_any_speed_when_bullet_hits_alien_then_speed_changes_by_fixed_delta() {
-        let result = speed_after_hit(120.0);
-        assert!((result - (120.0 + SPEED_PER_HIT)).abs() < 0.01);
-    }
-
-    #[test]
-    fn given_base_speed_when_wave_clears_then_speed_increases_by_alien_count() {
-        let alien_count = 10usize;
-        let result = speed_after_wave(Speed::BASE, alien_count);
-        assert!((result - (Speed::BASE + alien_count as f32)).abs() < 0.01);
-    }
-
-    #[test]
     fn given_overlapping_boxes_when_checking_aabb_then_returns_true() {
         assert!(aabb_overlaps(
             Vec2::ZERO,
@@ -246,17 +188,5 @@ mod tests {
         assert_eq!(data.len(), 100);
         assert_eq!(&data[0..4], &black);
         assert_eq!(&data[96..100], &white);
-    }
-
-    #[test]
-    fn given_base_speed_when_computing_burst_delay_then_equals_0_1() {
-        let delay = burst_delay_secs(Speed::BASE);
-        assert!((delay - 0.1).abs() < 0.001);
-    }
-
-    #[test]
-    fn given_double_speed_when_computing_burst_delay_then_delay_halves() {
-        let delay = burst_delay_secs(Speed::BASE * 2.0);
-        assert!((delay - 0.05).abs() < 0.001);
     }
 }
