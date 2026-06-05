@@ -15,6 +15,9 @@ use speed::*;
 mod trix;
 use trix::*;
 
+mod aliens;
+use aliens::*;
+
 mod core;
 use core::*;
 
@@ -73,10 +76,6 @@ pub(crate) fn create_app(for_wasm: bool) -> App {
     .insert_resource(Speed::new())
     .insert_resource(Swarm::new())
     .insert_resource(TrixShootCooldown(0.0))
-    .insert_resource(Wave {
-        number: 1,
-        spawn_count: Alien::COLS,
-    })
     .insert_resource(Score::default())
     .insert_resource(SpeedsterBoost::new())
     .insert_resource(RestartPending::default())

@@ -11,29 +11,6 @@ use rand::RngExt;
 // CONSTANTS
 // /////////////////////////////////////////////////////////////
 
-const ALIEN_BULLET_WIDTH: f32 = 4.0;
-const ALIEN_BULLET_HEIGHT: f32 = 10.0;
-const ALIEN_BULLET_BASE_SPEED: f32 = 150.0;
-const ALIEN_SHOOT_INTERVAL_MIN: f32 = 1.5;
-const ALIEN_SHOOT_INTERVAL_MAX: f32 = 3.0;
-const ALIEN_SHOOTER_PROBABILITY: f32 = 0.3;
-
-const ALIEN_FADE_DURATION_SECS: f32 = 0.3;
-
-const MACHINEGUNNER_PROBABILITY: f32 = 0.12;
-const MACHINEGUNNER_BURST_MIN: u8 = 3;
-const MACHINEGUNNER_BURST_MAX: u8 = 8;
-const MACHINEGUNNER_IDLE_MIN: f32 = 2.0;
-const MACHINEGUNNER_IDLE_MAX: f32 = 5.0;
-
-const SHIELDED_PROBABILITY: f32 = 0.10;
-const SHIELDED_HEALTH_MIN: u8 = 2;
-const SHIELDED_HEALTH_MAX: u8 = 5;
-
-const SPEEDSTER_PROBABILITY: f32 = 0.08;
-const SPEEDSTER_MULTIPLIER_MIN: f32 = 1.2;
-const SPEEDSTER_MULTIPLIER_MAX: f32 = 2.0;
-
 const START_BUTTON_COLOR: Color = Color::linear_rgb(0.89, 0.13, 0.74);
 const START_BUTTON_HOVER: Color = Color::linear_rgb(0.71, 0.09, 0.58);
 const RESTART_BUTTON_COLOR: Color = Color::linear_rgb(0.0, 0.63, 0.87);
@@ -41,38 +18,6 @@ const RESTART_BUTTON_HOVER: Color = Color::linear_rgb(0.10, 0.76, 1.0);
 
 const CAMERA_SHAKE_DURATION: f32 = 1.5;
 const CAMERA_SHAKE_AMPLITUDE: f32 = 6.0;
-
-// /////////////////////////////////////////////////////////////
-// DATA
-// /////////////////////////////////////////////////////////////
-
-pub(crate) const ALIEN_SHAPES: [[bool; 25]; 5] = [
-    // crab
-    [
-        false, true, false, true, false, true, true, true, true, true, true, true, false, true,
-        true, false, true, true, true, false, true, false, false, false, true,
-    ],
-    // squid
-    [
-        false, false, true, false, false, false, true, true, true, false, true, true, false, true,
-        true, true, false, true, false, true, false, true, false, true, false,
-    ],
-    // octopus
-    [
-        false, true, true, true, false, true, true, true, true, true, true, false, true, false,
-        true, true, true, true, true, true, false, true, false, true, false,
-    ],
-    // bat
-    [
-        true, false, false, false, true, true, true, false, true, true, true, true, true, true,
-        true, false, false, true, false, false, false, true, true, true, false,
-    ],
-    // star
-    [
-        true, false, true, false, true, false, true, true, true, false, true, true, false, true,
-        true, false, true, true, true, false, true, false, true, false, true,
-    ],
-];
 
 // /////////////////////////////////////////////////////////////
 // TYPE ALIASES
@@ -533,25 +478,24 @@ pub(crate) fn start_button_feedback(
 pub(crate) fn on_wave_splash_enter(
     mut commands: Commands,
     mut swarm: ResMut<Swarm>,
-    mut wave: ResMut<Wave>,
     mut splash_timer: ResMut<WaveSplashTimer>,
     all_ephemeral: WaveTransitionEntities,
     mut images: ResMut<Assets<Image>>,
 ) {
     *splash_timer = WaveSplashTimer::new();
-    *swarm = Swarm::new();
+    swarm.reset_position();
 
     let to_despawn: Vec<Entity> = all_ephemeral.iter().collect();
     for entity in to_despawn {
         commands.entity(entity).despawn();
     }
 
-    let row_count = rows_for_wave(wave.number);
-    wave.spawn_count = row_count * Alien::COLS;
+    let row_count = rows_for_wave(swarm.wave);
+    swarm.spawn_count = row_count * Alien::COLS;
     spawn_alien_wave(&mut commands, &mut images, &swarm, row_count, true);
 
     commands.spawn((
-        Text2d::new(format!("Wave {}", wave.number)),
+        Text2d::new(format!("Wave {}", swarm.wave)),
         TextFont {
             font_size: 56.0,
             ..default()
@@ -581,15 +525,15 @@ pub(crate) fn tick_wave_splash(
 pub(crate) fn check_wave_cleared(
     aliens: Query<Entity, With<Alien>>,
     mut speed: ResMut<Speed>,
-    mut wave: ResMut<Wave>,
+    mut swarm: ResMut<Swarm>,
     mut score: ResMut<Score>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
     if aliens.is_empty() {
-        let bonus = wave.spawn_count;
+        let bonus = swarm.spawn_count;
         speed.current = accelerate_on_wave(speed.current, bonus);
         score.value = score_wave_bonus(score.value, bonus);
-        wave.number += 1;
+        swarm.wave += 1;
         next_state.set(GameState::WaveSplash);
     }
 }
@@ -1099,11 +1043,11 @@ pub(crate) fn update_score_display(
 }
 
 pub(crate) fn update_wave_display(
-    wave: Res<Wave>,
+    swarm: Res<Swarm>,
     mut query: Query<&mut Text2d, With<WaveDisplay>>,
 ) {
     for mut text in query.iter_mut() {
-        text.0 = format!("WAVE\n{}", wave.number);
+        text.0 = format!("WAVE\n{}", swarm.wave);
     }
 }
 
@@ -1252,7 +1196,7 @@ pub(crate) fn detect_restart(
 pub(crate) fn apply_restart(
     mut pending: ResMut<RestartPending>,
     mut speed: ResMut<Speed>,
-    mut wave: ResMut<Wave>,
+    mut swarm: ResMut<Swarm>,
     mut cooldown: ResMut<TrixShootCooldown>,
     mut score: ResMut<Score>,
     mut boost: ResMut<SpeedsterBoost>,
@@ -1263,8 +1207,7 @@ pub(crate) fn apply_restart(
     }
     pending.0 = false;
     speed.current = Speed::BASE;
-    wave.number = 1;
-    wave.spawn_count = Alien::COLS;
+    *swarm = Swarm::new();
     cooldown.0 = 0.0;
     *score = Score::default();
     boost.multiplier = 1.0;

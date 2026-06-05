@@ -1,64 +1,7 @@
-use super::GameWindow;
 use bevy::prelude::*;
-
-// /////////////////////////////////////////////////////////////
-// CONSTANTS
-// /////////////////////////////////////////////////////////////
-
-const SWARM_START_Y: f32 = GameWindow::HEIGHT / 2.0 - 60.0;
-
-// /////////////////////////////////////////////////////////////
-// GAME MECHANICS
-// /////////////////////////////////////////////////////////////
-
-#[derive(Resource)]
-pub(crate) struct Wave {
-    pub(crate) number: u32,
-    pub(crate) spawn_count: usize,
-}
-
-#[derive(Resource)]
-pub(crate) struct SpeedsterBoost {
-    pub(crate) multiplier: f32,
-}
-
-impl SpeedsterBoost {
-    pub(crate) fn new() -> Self {
-        Self { multiplier: 1.0 }
-    }
-}
-
-// /////////////////////////////////////////////////////////////
-// SWARM
-// /////////////////////////////////////////////////////////////
-
-#[derive(Resource)]
-pub(crate) struct Swarm {
-    pub(crate) center_x: f32,
-    pub(crate) center_y: f32,
-    pub(crate) direction: f32,
-}
-
-impl Swarm {
-    pub(crate) fn new() -> Self {
-        Self {
-            center_x: 0.0,
-            center_y: SWARM_START_Y,
-            direction: 1.0,
-        }
-    }
-}
-
-// /////////////////////////////////////////////////////////////
-// RESTART
-// /////////////////////////////////////////////////////////////
 
 #[derive(Resource, Default)]
 pub(crate) struct RestartPending(pub(crate) bool);
-
-// /////////////////////////////////////////////////////////////
-// TIMERS / EFFECTS
-// /////////////////////////////////////////////////////////////
 
 #[derive(Resource)]
 pub(crate) struct WaveSplashTimer(pub(crate) Timer);
