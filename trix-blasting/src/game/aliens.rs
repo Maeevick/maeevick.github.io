@@ -1,5 +1,6 @@
 use super::GameWindow;
 use bevy::prelude::*;
+use rand::RngExt;
 
 pub(crate) const SWARM_START_Y: f32 = GameWindow::HEIGHT / 2.0 - 60.0;
 
@@ -150,12 +151,15 @@ pub(crate) fn alien_row_y(row: usize, swarm_center_y: f32) -> f32 {
     swarm_center_y - row as f32 * Alien::DROP
 }
 
-pub(crate) fn rows_for_wave_formula(wave: u32, rand_factor: f32) -> usize {
+pub(crate) fn rows_for_wave(wave: u32) -> usize {
     match wave {
         1 => 1,
         2 => 2,
         3 => 3,
-        n => (((n - 3) as f32 * rand_factor).floor() as usize).clamp(1, 12),
+        n => {
+            let rand_factor: f32 = rand::rng().random_range(0.0..1.0);
+            (((n - 3) as f32 * rand_factor).floor() as usize).clamp(1, 12)
+        }
     }
 }
 
@@ -233,19 +237,17 @@ mod tests {
 
     #[test]
     fn given_waves_1_to_3_when_computing_rows_then_matches_wave_number() {
-        assert_eq!(rows_for_wave_formula(1, 0.5), 1);
-        assert_eq!(rows_for_wave_formula(2, 0.5), 2);
-        assert_eq!(rows_for_wave_formula(3, 0.5), 3);
+        assert_eq!(rows_for_wave(1), 1);
+        assert_eq!(rows_for_wave(2), 2);
+        assert_eq!(rows_for_wave(3), 3);
     }
 
     #[test]
-    fn given_wave_4_with_zero_factor_when_computing_rows_then_clamps_to_1() {
-        assert_eq!(rows_for_wave_formula(4, 0.0), 1);
-    }
-
-    #[test]
-    fn given_large_wave_with_full_factor_when_computing_rows_then_caps_at_12() {
-        assert_eq!(rows_for_wave_formula(100, 1.0), 12);
+    fn given_wave_above_3_when_computing_rows_then_stays_within_bounds() {
+        for _ in 0..200 {
+            let result = rows_for_wave(50);
+            assert!((1..=12).contains(&result), "expected 1..=12, got {result}");
+        }
     }
 
     #[test]

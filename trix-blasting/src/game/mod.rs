@@ -18,8 +18,14 @@ use trix::*;
 mod aliens;
 use aliens::*;
 
-mod core;
-use core::*;
+mod colors;
+use colors::*;
+
+mod geometry;
+use geometry::*;
+
+mod image;
+use image::*;
 
 mod systems;
 use systems::*;

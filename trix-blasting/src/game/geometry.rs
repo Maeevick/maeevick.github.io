@@ -1,6 +1,6 @@
 use bevy::math::Vec2;
 
-pub fn aabb_overlaps(pos_a: Vec2, half_a: Vec2, pos_b: Vec2, half_b: Vec2) -> bool {
+pub(crate) fn aabb_overlaps(pos_a: Vec2, half_a: Vec2, pos_b: Vec2, half_b: Vec2) -> bool {
     (pos_a.x - pos_b.x).abs() < half_a.x + half_b.x
         && (pos_a.y - pos_b.y).abs() < half_a.y + half_b.y
 }

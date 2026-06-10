@@ -1,10 +1,5 @@
 use super::GameState;
 use super::*;
-use bevy::{
-    asset::RenderAssetUsages,
-    image::ImageSampler,
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
-};
 use rand::RngExt;
 
 // /////////////////////////////////////////////////////////////
@@ -41,92 +36,6 @@ pub(crate) type WaveTransitionEntities<'w, 's> = Query<
 >;
 
 // /////////////////////////////////////////////////////////////
-// COLOR HELPERS
-// /////////////////////////////////////////////////////////////
-
-fn hue_to_rgb(h: f32) -> [f32; 3] {
-    let h = h.rem_euclid(360.0);
-    let x = 1.0 - ((h / 60.0).rem_euclid(2.0) - 1.0).abs();
-    match (h / 60.0) as u32 {
-        0 => [1.0, x, 0.0],
-        1 => [x, 1.0, 0.0],
-        2 => [0.0, 1.0, x],
-        3 => [0.0, x, 1.0],
-        4 => [x, 0.0, 1.0],
-        _ => [1.0, 0.0, x],
-    }
-}
-
-pub(crate) fn pick_rainbow_color(rng: &mut impl rand::RngExt) -> [u8; 4] {
-    let hue: f32 = rng.random_range(0.0..360.0);
-    let brightness: f32 = rng.random_range(0.7..1.0);
-    let [r, g, b] = hue_to_rgb(hue);
-    [
-        (r * brightness * 255.0) as u8,
-        (g * brightness * 255.0) as u8,
-        (b * brightness * 255.0) as u8,
-        255,
-    ]
-}
-
-fn brighten_bullet(color: Color) -> Color {
-    let hsla = Hsla::from(color);
-    Color::from(Hsla {
-        lightness: hsla.lightness.max(0.65),
-        ..hsla
-    })
-}
-
-pub(crate) fn pick_complementary_pair(rng: &mut impl rand::RngExt) -> ([u8; 4], [u8; 4]) {
-    let hue: f32 = rng.random_range(0.0..360.0);
-    let brightness: f32 = rng.random_range(0.7..1.0);
-    let [r1, g1, b1] = hue_to_rgb(hue);
-    let [r2, g2, b2] = hue_to_rgb((hue + 180.0).rem_euclid(360.0));
-    (
-        [
-            (r1 * brightness * 255.0) as u8,
-            (g1 * brightness * 255.0) as u8,
-            (b1 * brightness * 255.0) as u8,
-            255,
-        ],
-        [
-            (r2 * brightness * 255.0) as u8,
-            (g2 * brightness * 255.0) as u8,
-            (b2 * brightness * 255.0) as u8,
-            255,
-        ],
-    )
-}
-
-// /////////////////////////////////////////////////////////////
-// IMAGE HELPERS
-// /////////////////////////////////////////////////////////////
-
-pub(crate) fn make_alien_image(images: &mut Assets<Image>, pixel_data: Vec<u8>) -> Handle<Image> {
-    let mut image = Image::new(
-        Extent3d {
-            width: 5,
-            height: 5,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        pixel_data,
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::RENDER_WORLD,
-    );
-    image.sampler = ImageSampler::nearest();
-    images.add(image)
-}
-
-fn rows_for_wave(wave: u32) -> usize {
-    if wave < 4 {
-        return wave as usize;
-    }
-    let rand_factor: f32 = rand::rng().random_range(0.0..1.0);
-    rows_for_wave_formula(wave, rand_factor)
-}
-
-// /////////////////////////////////////////////////////////////
 // STARTUP
 // /////////////////////////////////////////////////////////////
 
@@ -152,19 +61,7 @@ pub(crate) fn on_startup(mut commands: Commands, mut images: ResMut<Assets<Image
             }
         })
         .collect();
-    let mut ship_img = Image::new(
-        Extent3d {
-            width: 15,
-            height: 15,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        ship_data,
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::RENDER_WORLD,
-    );
-    ship_img.sampler = ImageSampler::nearest();
-    let ship_handle = images.add(ship_img);
+    let ship_handle = make_pixel_image(&mut images, ship_data, 15);
 
     commands.spawn((
         Sprite {
@@ -266,9 +163,10 @@ pub(crate) fn spawn_alien_wave(
                     b as f32 / 255.0,
                     1.0,
                 ));
-                make_alien_image(
+                make_pixel_image(
                     images,
                     special_alien_pixel_data(ca, cb, &ALIEN_SHAPES[shape_idx]),
+                    5,
                 )
             } else if is_speedster {
                 let sp_color = pick_rainbow_color(&mut rng);
@@ -279,23 +177,26 @@ pub(crate) fn spawn_alien_wave(
                     b as f32 / 255.0,
                     1.0,
                 ));
-                make_alien_image(
+                make_pixel_image(
                     images,
                     alien_pixel_data([255, 255, 255, 255], &ALIEN_SHAPES[shape_idx]),
+                    5,
                 )
             } else if is_shielded {
-                make_alien_image(
+                make_pixel_image(
                     images,
                     alien_pixel_data_bg(
                         color_bytes,
                         [255, 255, 255, 180],
                         &ALIEN_SHAPES[shape_idx],
                     ),
+                    5,
                 )
             } else {
-                make_alien_image(
+                make_pixel_image(
                     images,
                     alien_pixel_data(color_bytes, &ALIEN_SHAPES[shape_idx]),
+                    5,
                 )
             };
 
@@ -1086,19 +987,7 @@ pub(crate) fn on_game_over_enter(
                 }
             })
             .collect();
-        let mut img = Image::new(
-            Extent3d {
-                width: 5,
-                height: 5,
-                depth_or_array_layers: 1,
-            },
-            TextureDimension::D2,
-            data,
-            TextureFormat::Rgba8UnormSrgb,
-            RenderAssetUsages::RENDER_WORLD,
-        );
-        img.sampler = ImageSampler::nearest();
-        let skull_handle = images.add(img);
+        let skull_handle = make_pixel_image(&mut images, data, 5);
 
         commands.spawn((
             Sprite {
