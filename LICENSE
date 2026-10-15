@@ -46,3 +46,10 @@ Under the following terms:
   distribute your contributions under the same license as the original.
 
 For the full license text, visit: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+
+THIRD-PARTY LICENSES:
+Third-party files keep their own licenses, which this file does not replace:
+- app/static/fonts/VT323-*: VT323, Copyright 2011, The VT323 Project Authors,
+  under the SIL Open Font License 1.1 (app/static/fonts/OFL-VT323.txt)
+- app/static/fonts/SpaceMono-*: Space Mono, Copyright 2016 The Space Mono Project
+  Authors, under the SIL Open Font License 1.1 (app/static/fonts/OFL-SpaceMono.txt)
